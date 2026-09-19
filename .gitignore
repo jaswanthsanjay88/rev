@@ -1,0 +1,29 @@
+# Environments & Cache
+.venv/
+env/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Weights & Runs
+runs/
+checkpoints/
+*_checkpoint/
+*.pt
+*.safetensors
+*.bin
+
+# Next.js Playground
+playground/node_modules/
+playground/.next/
+playground/out/
+
+# Reference Clones
+kev/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log

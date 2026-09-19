@@ -1,0 +1,179 @@
+"""
+Decision model: causal LM backbone + block-causal branch mask + pointer readout.
+"""
+
+import math
+import re
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from peft import LoraConfig, get_peft_model
+
+# Reuse existing Qwen special tokens as delimiters (state, q, opt, /opt, decide)
+SPECIAL = ["<|fim_prefix|>", "<|fim_middle|>", "<|box_start|>", "<|box_end|>", "<|fim_suffix|>"]
+MAX_STATE, MAX_BRANCH = 384, 1024
+
+_SPECIAL_RE = re.compile(r"<\|([A-Za-z0-9_]+)\|>")
+
+
+def load_tokenizer(name="Qwen/Qwen2.5-0.5B"):
+    return AutoTokenizer.from_pretrained(name)
+
+
+def user_tokens(tok, text: str):
+    """
+    Tokenizes user-supplied text so it can never produce control tokens.
+    Rewrites `<|name|>` to `<¦name¦>` before tokenization.
+    """
+    return tok(_SPECIAL_RE.sub(r"<¦\1¦>", str(text)), add_special_tokens=False).input_ids
+
+
+OPT_NONE, OPT_DECIDE = -1, -2
+
+
+def encode(tok, rec, max_state=MAX_STATE, max_branch=MAX_BRANCH):
+    """
+    Packs state + multiple questions into one token sequence.
+    Branch position IDs restart right after state so question order has zero bias.
+    """
+    state_tokens = user_tokens(tok, rec["state"])
+    S = [tok.convert_tokens_to_ids(SPECIAL[0])] + state_tokens[: max_state - 1]
+    ids = list(S)
+    seg = [0] * len(S)
+    pos = list(range(len(S)))
+    opt = [OPT_NONE] * len(S)
+
+    q_id, o_id, c_id, d_id = [tok.convert_tokens_to_ids(t) for t in SPECIAL[1:]]
+    decide_idx, opt_idx = [], []
+    p0 = len(S)
+
+    for k, q in enumerate(rec["questions"], start=1):
+        instr = [q_id] + user_tokens(tok, q["instr"])
+        spans = [[o_id] + user_tokens(tok, o) + [c_id] for o in q["options"]]
+        br = instr + [t for sp in spans for t in sp] + [d_id]
+
+        base = len(ids)
+        br_pos = list(range(p0, p0 + len(br)))  # Position IDs restart at len(state)
+        br_opt = [OPT_NONE] * len(instr) + [j for j, sp in enumerate(spans) for _ in sp] + [OPT_DECIDE]
+
+        ends, cursor = [], len(instr)
+        for sp in spans:
+            cursor += len(sp)
+            ends.append(cursor - 1)
+
+        ids += br
+        seg += [k] * len(br)
+        pos += br_pos
+        opt += br_opt
+        decide_idx.append(base + len(br) - 1)
+        opt_idx.append([base + e for e in ends])
+
+    return {
+        "ids": ids,
+        "seg": seg,
+        "pos": pos,
+        "opt": opt,
+        "decide_idx": decide_idx,
+        "opt_idx": opt_idx,
+        "labels": [q.get("label", 0) for q in rec["questions"]],
+    }
+
+
+def branch_mask_batch(segs, device, dtype=torch.float32):
+    """
+    Additive block-causal attention mask:
+    Token i can attend to token j iff:
+      1. j <= i (causal)
+      2. seg[j] == 0 (state is visible to all) OR seg[j] == seg[i] (same question branch)
+    Question branches can NEVER attend to each other.
+    """
+    L = max(len(s) for s in segs)
+    s = torch.full((len(segs), L), -1, device=device)
+    for b, seg in enumerate(segs):
+        s[b, : len(seg)] = torch.tensor(seg, device=device)
+
+    causal = torch.tril(torch.ones(L, L, dtype=torch.bool, device=device))
+    same = (s[:, None, :] == s[:, :, None]) | (s[:, None, :] == 0)
+    valid_key = (s != -1)[:, None, :]
+    allow = (causal[None] & same & valid_key) | torch.eye(L, dtype=torch.bool, device=device)[None]
+
+    mask = torch.zeros(len(segs), L, L, dtype=dtype, device=device)
+    return mask.masked_fill(~allow, torch.finfo(dtype).min)[:, None]
+
+
+class PointerHead(nn.Module):
+    """Bilinear pointer readout head scoring option tokens against <decide>."""
+    def __init__(self, d: int, dp: int = 256):
+        super().__init__()
+        self.q = nn.Linear(d, dp)
+        self.k = nn.Linear(d, dp)
+        self.scale = 1.0 / math.sqrt(dp)
+
+    def forward(self, h_decide, h_opts):
+        # h_decide: [d], h_opts: [K, d] -> logits [K]
+        return (self.k(h_opts) @ self.q(h_decide)) * self.scale
+
+
+class DecisionModel(nn.Module):
+    def __init__(
+        self,
+        base_name="Qwen/Qwen2.5-0.5B",
+        lora_r=16,
+        head_dim=256,
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        dtype=None,
+    ):
+        super().__init__()
+        self.device = device
+        self.base_name = base_name
+        self.lora_r = lora_r
+        self.head_dim = head_dim
+
+        if dtype is None:
+            dtype = torch.bfloat16 if "cuda" in str(device) else torch.float32
+
+        # Backbone only (no lm_head): prefill only
+        self.lm = AutoModelForCausalLM.from_pretrained(
+            base_name,
+            attn_implementation="sdpa" if "cuda" in str(device) else "eager",
+            dtype=dtype,
+        ).model
+
+        if lora_r > 0:
+            cfg = LoraConfig(
+                task_type="FEATURE_EXTRACTION",
+                r=lora_r,
+                lora_alpha=2 * lora_r,
+                lora_dropout=0.05,
+                target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
+            )
+            self.lm = get_peft_model(self.lm, cfg)
+
+        self.head = PointerHead(self.lm.config.hidden_size, dp=head_dim)
+        self.to(device)
+
+    def hidden_batch(self, encs):
+        L = max(len(e["ids"]) for e in encs)
+        ids = torch.full((len(encs), L), 0, device=self.device)
+        pos = torch.zeros((len(encs), L), dtype=torch.long, device=self.device)
+        for b, e in enumerate(encs):
+            ids[b, : len(e["ids"])] = torch.tensor(e["ids"], device=self.device)
+            pos[b, : len(e["pos"])] = torch.tensor(e["pos"], device=self.device)
+
+        lm_dtype = next(self.lm.parameters()).dtype
+        mask = branch_mask_batch([e["seg"] for e in encs], self.device, dtype=lm_dtype)
+        return self.lm(input_ids=ids, position_ids=pos, attention_mask=mask).last_hidden_state.float()
+
+    def forward_batch(self, encs):
+        hs = self.hidden_batch(encs)
+        return [
+            [self.head(hs[b][d], hs[b][torch.tensor(oi, device=self.device)])
+             for d, oi in zip(e["decide_idx"], e["opt_idx"])]
+            for b, e in enumerate(encs)
+        ]
+
+    @torch.no_grad()
+    def probs(self, enc):
+        logits = self.forward_batch([enc])[0]
+        return [F.softmax(z, dim=-1).cpu() for z in logits]
