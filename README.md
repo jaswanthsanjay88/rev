@@ -1,10 +1,15 @@
 # rev
 
+<p>
+  <a href="https://huggingface.co/jaswanthsanjay88/rev-0.5b"><img alt="Weights: rev-0.5b" src="https://img.shields.io/badge/%F0%9F%A4%97%20WEIGHTS-jaswanthsanjay88%2Frev--0.5b-yellow.svg?style=for-the-badge&labelColor=000000" height="28"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
+</p>
+
 > **Fast, prefill-only decision model. Typed questions in, calibrated probabilities out, single forward pass.**
 
 `rev` is a decision model built on top of a causal LM backbone (`Qwen/Qwen2.5-0.5B` to 8B) using a LoRA adapter and a bilinear pointer readout head. 
 
-It reads a document once and evaluates multiple typed questions in parallel in a **single prefill forward pass with zero autoregressive text generation / decoding**.
+It reads a document once and evaluates multiple typed questions in parallel in a **single prefill forward pass with zero autoregressive text generation / decoding**. Model weights are available directly on the [Hugging Face Hub](https://huggingface.co/jaswanthsanjay88/rev-0.5b).
 
 ---
 
@@ -71,7 +76,7 @@ It reads a document once and evaluates multiple typed questions in parallel in a
 ### 1. Installation
 
 ```bash
-git clone https://github.com/<your-username>/rev.git
+git clone https://github.com/jaswanthsanjay88/rev.git
 cd rev
 pip install -e .
 ```
@@ -79,7 +84,8 @@ pip install -e .
 ### 2. Run the Server
 
 ```bash
-python -m rev.serve --port 8000
+# Automatically downloads weights from Hugging Face Hub on first load!
+python -m rev.serve --run jaswanthsanjay88/rev-0.5b --port 8000
 ```
 
 ### 3. Query the Model (`POST /v1/systemone`)

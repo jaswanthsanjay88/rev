@@ -178,7 +178,7 @@ def resolve_run(run: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run", default="runs/rev", help="Local directory or Hugging Face repo ID (e.g. jaswanthsanjay88/rev-0.5b)")
+    parser.add_argument("--run", default="jaswanthsanjay88/rev-0.5b", help="Local directory or Hugging Face repo ID (default: jaswanthsanjay88/rev-0.5b)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--mock", action="store_true", help="Force fast mock engine")
     args = parser.parse_args()
