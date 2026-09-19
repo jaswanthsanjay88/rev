@@ -39,7 +39,7 @@ export function buildRequest(chess: Chess): { req: SystemOneRequest; legal: Move
     legal,
     req: {
       state: positionState(chess),
-      model: "kev-latest",
+      model: "rev-latest",
       questions: {
         move: {
           type: "choice",
@@ -96,7 +96,7 @@ export type SavedGame = {
   result?: string;
 };
 
-const KEY = "kev.chess.v1";
+const KEY = "rev.chess.v1";
 
 // Replays a game's moves, stopping at the first one that is not legal in its position (chess.js throws on illegal SAN).
 export function replay(moves: SavedGame["moves"]): { chess: Chess; moves: SavedGame["moves"] } {

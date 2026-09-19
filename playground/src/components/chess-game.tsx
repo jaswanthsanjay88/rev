@@ -191,7 +191,7 @@ export function ChessGame() {
     <div className="mx-auto flex w-full max-w-6xl flex-col px-6 pt-8 pb-16 md:px-10">
       <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <nav className="flex items-baseline gap-4 text-[15px]">
-          <Link href="/" className="text-muted-foreground hover:text-foreground">kev</Link>
+          <Link href="/" className="text-muted-foreground hover:text-foreground">rev</Link>
           <span className="font-medium tracking-tight">chess</span>
         </nav>
         <p className="text-[13px] text-muted-foreground">{model ? <span className="font-mono">{model}</span> : "connecting"}</p>

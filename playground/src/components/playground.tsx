@@ -40,7 +40,7 @@ export function Playground() {
   const parsed = useMemo<{ req?: SystemOneRequest; err?: string }>(() => {
     try {
       const questions = JSON.parse(questionsText) as Record<string, Question>;
-      return { req: { state: parseState(stateText), model: "kev-latest", questions } };
+      return { req: { state: parseState(stateText), model: "rev-latest", questions } };
     } catch (e) { return { err: (e as Error).message }; }
   }, [stateText, questionsText]);
 
