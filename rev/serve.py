@@ -163,25 +163,39 @@ def info():
     return {"run": STATE["run"], "device": STATE["dev"], "base": STATE["base"], "mode": STATE["mode"]}
 
 
+def resolve_run(run: str) -> str:
+    """Local run directory, or a Hugging Face Hub repo id (e.g. jaswanthsanjay88/rev-0.5b)."""
+    if os.path.isdir(run):
+        return run
+    try:
+        from huggingface_hub import snapshot_download
+        print(f"Checking Hugging Face Hub for: {run}...")
+        return snapshot_download(run, allow_patterns=["*.json", "*.safetensors", "*.pt", "*.txt"])
+    except Exception as e:
+        print(f"Could not download from Hub ({e}). Using {run}")
+        return run
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run", default="runs/rev")
+    parser.add_argument("--run", default="runs/rev", help="Local directory or Hugging Face repo ID (e.g. jaswanthsanjay88/rev-0.5b)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--mock", action="store_true", help="Force fast mock engine")
     args = parser.parse_args()
 
     base_name = "Qwen/Qwen2.5-0.5B"
     dev = "cuda" if (HAS_NEURAL and torch.cuda.is_available()) else "cpu"
+    run_dir = resolve_run(args.run)
 
     if HAS_NEURAL and not args.mock:
-        if os.path.exists(f"{args.run}/head.pt"):
-            meta = torch.load(f"{args.run}/head.pt", map_location="cpu")
+        if os.path.exists(f"{run_dir}/head.pt"):
+            meta = torch.load(f"{run_dir}/head.pt", map_location="cpu")
             base_name = meta.get("base", base_name)
-            tok = AutoTokenizer.from_pretrained(args.run)
+            tok = AutoTokenizer.from_pretrained(run_dir)
             model = DecisionModel(base_name=base_name, lora_r=meta.get("lora", 16), device=dev)
             model.head.load_state_dict(meta["head"])
-            if os.path.exists(f"{args.run}/adapter_model.safetensors"):
-                model.lm = PeftModel.from_pretrained(model.lm.base_model.model, args.run)
+            if os.path.exists(f"{run_dir}/adapter_model.safetensors"):
+                model.lm = PeftModel.from_pretrained(model.lm.base_model.model, run_dir)
             STATE.update(run=args.run, tok=tok, model=model, dev=dev, base=base_name, mode="neural")
         else:
             print(f"Loading {base_name} on {dev}...")
