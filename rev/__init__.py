@@ -4,7 +4,11 @@ rev: Prefill-only decision model with TypeSafe System One API.
 
 __version__ = "0.1.0"
 
-from .model import DecisionModel, PointerHead, encode, user_tokens, branch_mask_batch
+try:
+    from .model import DecisionModel, PointerHead, encode, user_tokens, branch_mask_batch
+except ImportError:
+    pass
+
 from .api import (
     Noul,
     Choice,
@@ -18,11 +22,6 @@ from .api import (
 )
 
 __all__ = [
-    "DecisionModel",
-    "PointerHead",
-    "encode",
-    "user_tokens",
-    "branch_mask_batch",
     "Noul",
     "Choice",
     "Score",
