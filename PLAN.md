@@ -38,7 +38,11 @@ A high-throughput, prefill-only decision engine. Typed questions in, calibrated 
 - **LoRA Hyperparameters**:
   - Backbone: `Qwen/Qwen2.5-0.5B`
   - $r = 16, \alpha = 32$, dropout $0.05$ applied to all linear projections (`q, k, v, o, gate, up, down`).
-  - Learning rate: $5\times 10^{-5}$ with AdamW and linear warmup.
+- **Training Loss Convergence**:
+  $$\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{CE}} + 0.5 \cdot \mathcal{L}_{\text{RPS}}$$
+  
+  ![Training Loss Convergence](assets/training_loss.png)
+
 - **Publishing**: Trained model artifacts (LoRA adapter + `PointerHead` weights) pushed to Hugging Face Hub: [`jaswanthsanjay88/rev-0.5b`](https://huggingface.co/jaswanthsanjay88/rev-0.5b).
 
 ---

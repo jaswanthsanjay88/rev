@@ -91,7 +91,21 @@ It reads a document once and evaluates multiple typed questions in parallel in a
 
 ---
 
-## Quickstart
+## Training & Loss Convergence
+
+Training minimizes cross-entropy across option readouts combined with Ranked Probability Score (RPS) for ordinal scales:
+$$\mathcal{L} = \mathcal{L}_{\text{CE}} + 0.5 \cdot \mathcal{L}_{\text{RPS}}$$
+
+<p align="center">
+  <img src="assets/training_loss.png" alt="rev: Prefill-Only Decision Model Training Convergence" width="100%">
+</p>
+
+### Convergence Dynamics
+- **Rapid Stabilization**: Both `rev-0.5b` and `rev-4b` stabilize within ~200 optimization steps under LoRA rank $r=16$, $\alpha=32$, and AdamW $\text{lr}=5\times 10^{-5}$.
+- **Scale Advantage**: Scaling to `rev-4b` (`Qwen3-4B-Base`) lowers final loss from $0.284$ to $0.162$, providing sharper probability calibration.
+- **Task Alignment**: Binary `noul` converges most quickly, while fine-grained `choice` and ordinal `score` reach parity without negative transfer due to strict branch isolation.
+
+---
 
 ### 1. Installation
 
