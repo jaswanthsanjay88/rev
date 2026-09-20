@@ -2,6 +2,7 @@
 Decision model: causal LM backbone + block-causal branch mask + pointer readout.
 """
 
+import hashlib
 import math
 import re
 import torch
@@ -78,6 +79,84 @@ def encode(tok, rec, max_state=MAX_STATE, max_branch=MAX_BRANCH):
         "opt_idx": opt_idx,
         "labels": [q.get("label", 0) for q in rec["questions"]],
     }
+
+
+def encode_state(tok, state_text: str, max_state: int = MAX_STATE):
+    """
+    Encodes the state prefix once.
+    Returns input_ids, position_ids, and prefix token length.
+    """
+    state_tokens = user_tokens(tok, state_text)
+    prefix_ids = [tok.convert_tokens_to_ids(SPECIAL[0])] + state_tokens[: max_state - 1]
+    return {
+        "ids": prefix_ids,
+        "pos": list(range(len(prefix_ids))),
+        "length": len(prefix_ids),
+    }
+
+
+def encode_question_branches(tok, questions: list[dict], state_len: int):
+    """
+    Encodes each question as an independent branch whose position IDs begin at state_len.
+    Branches are evaluated as separate batch rows against the shared prefix cache.
+    """
+    q_id, o_id, c_id, d_id = [tok.convert_tokens_to_ids(t) for t in SPECIAL[1:]]
+    branches = []
+
+    for q in questions:
+        instr = [q_id] + user_tokens(tok, q["instr"])
+        spans = [[o_id] + user_tokens(tok, o) + [c_id] for o in q["options"]]
+        br = instr + [t for sp in spans for t in sp] + [d_id]
+
+        br_pos = list(range(state_len, state_len + len(br)))
+        ends, cursor = [], len(instr)
+        for sp in spans:
+            cursor += len(sp)
+            ends.append(cursor - 1)
+
+        branches.append({
+            "ids": br,
+            "pos": br_pos,
+            "decide_idx": len(br) - 1,
+            "opt_idx": ends,
+            "num_opts": len(spans),
+        })
+
+    max_len = max(len(b["ids"]) for b in branches) if branches else 0
+    return {"branches": branches, "max_len": max_len}
+
+
+def clone_or_expand_past_key_values(past_key_values, batch_size: int):
+    """
+    Clones or expands a cached prefix across batch dimension B (one row per question branch).
+    Guarantees subsequent forward passes do not mutate the cached prefix tensors.
+    """
+    if hasattr(past_key_values, "key_cache") and hasattr(past_key_values, "value_cache"):
+        from transformers.cache_utils import DynamicCache
+        new_cache = DynamicCache()
+        if batch_size == 1:
+            new_cache.key_cache = [k.clone() for k in past_key_values.key_cache]
+            new_cache.value_cache = [v.clone() for v in past_key_values.value_cache]
+        else:
+            new_cache.key_cache = [
+                k.expand(batch_size, -1, -1, -1).contiguous()
+                for k in past_key_values.key_cache
+            ]
+            new_cache.value_cache = [
+                v.expand(batch_size, -1, -1, -1).contiguous()
+                for v in past_key_values.value_cache
+            ]
+        if hasattr(past_key_values, "_seen_tokens"):
+            new_cache._seen_tokens = past_key_values._seen_tokens
+        return new_cache
+    elif isinstance(past_key_values, (tuple, list)):
+        if batch_size == 1:
+            return tuple((k.clone(), v.clone()) for k, v in past_key_values)
+        return tuple(
+            (k.expand(batch_size, -1, -1, -1).contiguous(), v.expand(batch_size, -1, -1, -1).contiguous())
+            for k, v in past_key_values
+        )
+    return past_key_values
 
 
 def branch_mask_batch(segs, device, dtype=torch.float32):
@@ -177,3 +256,74 @@ class DecisionModel(nn.Module):
     def probs(self, enc):
         logits = self.forward_batch([enc])[0]
         return [F.softmax(z, dim=-1).cpu() for z in logits]
+
+    @torch.no_grad()
+    def compute_state_cache(self, tok, state_text: str, max_state: int = MAX_STATE):
+        """
+        Prefills the state prefix and caches key-value activations.
+        Returns:
+          - past_key_values: cached KV tensors
+          - state_len: prefix token length
+          - state_hash: SHA-256 hash of the normalized state
+        """
+        enc_state = encode_state(tok, state_text, max_state=max_state)
+        ids = torch.tensor([enc_state["ids"]], device=self.device, dtype=torch.long)
+        pos = torch.tensor([enc_state["pos"]], device=self.device, dtype=torch.long)
+        out = self.lm(input_ids=ids, position_ids=pos, use_cache=True)
+        h = hashlib.sha256(state_text.strip().encode("utf-8")).hexdigest()
+        return out.past_key_values, enc_state["length"], h
+
+    @torch.no_grad()
+    def forward_with_cache(self, branch_data: dict, past_key_values, state_len: int):
+        """
+        Evaluates question branches against the precomputed state KV-cache.
+        Each branch is an independent row in the batch, guaranteeing branch isolation.
+        """
+        branches = branch_data["branches"]
+        if not branches:
+            return []
+
+        B = len(branches)
+        L_max = branch_data["max_len"]
+
+        ids = torch.zeros((B, L_max), dtype=torch.long, device=self.device)
+        pos = torch.zeros((B, L_max), dtype=torch.long, device=self.device)
+        attn_mask = torch.zeros((B, state_len + L_max), dtype=torch.long, device=self.device)
+        attn_mask[:, :state_len] = 1
+
+        for b, br in enumerate(branches):
+            l = len(br["ids"])
+            ids[b, :l] = torch.tensor(br["ids"], device=self.device)
+            pos[b, :l] = torch.tensor(br["pos"], device=self.device)
+            attn_mask[b, state_len : state_len + l] = 1
+
+        expanded_pkv = clone_or_expand_past_key_values(past_key_values, batch_size=B)
+
+        out = self.lm(
+            input_ids=ids,
+            position_ids=pos,
+            attention_mask=attn_mask,
+            past_key_values=expanded_pkv,
+        )
+        hs = out.last_hidden_state.float()
+
+        logits_list = []
+        for b, br in enumerate(branches):
+            d_idx = br["decide_idx"]
+            o_indices = torch.tensor(br["opt_idx"], device=self.device)
+            h_decide = hs[b, d_idx]
+            h_opts = hs[b, o_indices]
+            z = self.head(h_decide, h_opts)
+            logits_list.append(z)
+
+        return logits_list
+
+    @torch.no_grad()
+    def probs_cached(self, tok, rec: dict, past_key_values, state_len: int):
+        """
+        Computes answer probabilities for rec using a precomputed prefix KV-cache.
+        """
+        branch_data = encode_question_branches(tok, rec["questions"], state_len)
+        logits = self.forward_with_cache(branch_data, past_key_values, state_len)
+        return [F.softmax(z, dim=-1).cpu() for z in logits]
+

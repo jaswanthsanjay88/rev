@@ -23,6 +23,10 @@ try:
 except ImportError:
     HAS_NEURAL = False
 
+from .cache import StateKVCacheManager
+
+CACHE = StateKVCacheManager(max_entries=64)
+
 app = FastAPI(title="rev")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -77,29 +81,72 @@ def _mock_probs(rec):
     return ps, {"tokens": len(state_str.split()) * 2, "latency_ms": 12.5}
 
 
-def _probs(rec):
+def _probs(rec, use_cache=True):
+    state_str = str(rec.get("state", ""))
+    state_hash = hashlib.sha256(state_str.strip().encode("utf-8")).hexdigest()
+
     if STATE["model"] is not None and HAS_NEURAL:
         tok, model = STATE["tok"], STATE["model"]
-        enc = encode(tok, rec)
-        t0 = time.time()
-        ps = model.probs(enc)
-        dt = time.time() - t0
-        return [p.tolist() for p in ps], {"tokens": len(enc["ids"]), "latency_ms": round(dt * 1000, 2)}
+        if use_cache:
+            entry = CACHE.get_by_hash(state_hash)
+            t0 = time.time()
+            if entry is not None:
+                ps = model.probs_cached(tok, rec, entry.past_key_values, entry.state_len)
+                dt = time.time() - t0
+                return [p.tolist() for p in ps], {
+                    "tokens": entry.state_len,
+                    "latency_ms": round(dt * 1000, 2),
+                    "cached": True,
+                    "state_hash": state_hash,
+                }
+            else:
+                pkv, s_len, _ = model.compute_state_cache(tok, state_str)
+                CACHE.put(state_str, pkv, s_len)
+                ps = model.probs_cached(tok, rec, pkv, s_len)
+                dt = time.time() - t0
+                return [p.tolist() for p in ps], {
+                    "tokens": s_len,
+                    "latency_ms": round(dt * 1000, 2),
+                    "cached": False,
+                    "state_hash": state_hash,
+                }
+        else:
+            enc = encode(tok, rec)
+            t0 = time.time()
+            ps = model.probs(enc)
+            dt = time.time() - t0
+            return [p.tolist() for p in ps], {
+                "tokens": len(enc["ids"]),
+                "latency_ms": round(dt * 1000, 2),
+                "cached": False,
+            }
     else:
-        return _mock_probs(rec)
+        entry = CACHE.get_by_hash(state_hash) if use_cache else None
+        ps, m = _mock_probs(rec)
+        if entry is not None:
+            m["cached"] = True
+            m["latency_ms"] = 1.8  # Simulates sub-5ms cached evaluation
+            m["state_hash"] = state_hash
+        else:
+            if use_cache:
+                CACHE.put(state_str, None, m["tokens"])
+            m["cached"] = False
+            m["state_hash"] = state_hash
+        return ps, m
 
 
 @app.post("/v1/systemone")
 def systemone(req: SystemOneRequest):
-    """TypeSafe System One contract."""
+    """TypeSafe System One contract with Prefix KV-Caching."""
     rec, meta = to_record(req)
-    ps, m = _probs(rec)
+    ps, m = _probs(rec, use_cache=True)
     answers = to_answers(ps, meta)
     return {
         "model": req.model,
         "answers": answers,
         "usage": {"input_tokens": m["tokens"], "output_tokens": len(str(answers)) // 4},
         "latency_ms": m["latency_ms"],
+        "cached": m.get("cached", False),
     }
 
 
@@ -161,6 +208,23 @@ def models():
 @app.get("/api/info")
 def info():
     return {"run": STATE["run"], "device": STATE["dev"], "base": STATE["base"], "mode": STATE["mode"]}
+
+
+@app.get("/v1/state/cache")
+def cache_stats():
+    """Returns statistics for the LRU document prefix KV-cache."""
+    return CACHE.stats()
+
+
+@app.delete("/v1/state/cache")
+def cache_clear(state_hash: str = None):
+    """Evicts a specific document by hash or clears the entire KV-cache."""
+    if state_hash:
+        evicted = CACHE.evict(state_hash)
+        return {"evicted": evicted, "state_hash": state_hash}
+    else:
+        CACHE.clear()
+        return {"cleared": True}
 
 
 def resolve_run(run: str) -> str:
