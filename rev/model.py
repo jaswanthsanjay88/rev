@@ -324,12 +324,10 @@ class DecisionModel(nn.Module):
             mask_2d[b, state_len : state_len + l] = 1
 
         expanded_pkv = clone_or_expand_past_key_values(past_key_values, batch_size=B)
-        out = self.lm(
-            input_ids=ids,
-            position_ids=pos,
-            attention_mask=mask_2d,
-            past_key_values=expanded_pkv,
-        )
+        if B == 1:
+            out = self.lm(input_ids=ids, past_key_values=expanded_pkv)
+        else:
+            out = self.lm(input_ids=ids, position_ids=pos, attention_mask=mask_2d, past_key_values=expanded_pkv)
         hs = out.last_hidden_state.float()
 
         logits_list = []
