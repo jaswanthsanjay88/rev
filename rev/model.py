@@ -220,7 +220,9 @@ class DecisionModel(nn.Module):
         self.lm = AutoModelForCausalLM.from_pretrained(
             base_name,
             attn_implementation="sdpa" if "cuda" in str(device) else "eager",
-            dtype=dtype,
+            torch_dtype=dtype,
+            device_map=device if "cuda" in str(device) else None,
+            low_cpu_mem_usage=True,
         ).model
 
         if gradient_checkpointing:
@@ -236,7 +238,7 @@ class DecisionModel(nn.Module):
             )
             self.lm = get_peft_model(self.lm, cfg)
 
-        self.head = PointerHead(self.lm.config.hidden_size, dp=head_dim)
+        self.head = PointerHead(self.lm.config.hidden_size, dp=head_dim).to(device)
         self.to(device)
 
     def hidden_batch(self, encs):
