@@ -126,36 +126,48 @@ def encode_question_branches(tok, questions: list[dict], state_len: int):
     return {"branches": branches, "max_len": max_len}
 
 
-def clone_or_expand_past_key_values(past_key_values, batch_size: int):
-    """
-    Clones or expands a cached prefix across batch dimension B (one row per question branch).
-    Guarantees subsequent forward passes do not mutate the cached prefix tensors.
-    """
+def clone_or_expand_past_key_values(past_key_values, batch_size: int = 1):
+    if past_key_values is None:
+        return None
+    from transformers.cache_utils import DynamicCache
+
+    # Modern transformers (v4.45+): past_key_values.layers contains DynamicLayer instances
+    if hasattr(past_key_values, "layers") and len(past_key_values.layers) > 0:
+        new_data = []
+        for l in past_key_values.layers:
+            k, v = l.keys, l.values
+            if batch_size == 1:
+                k_out = k.clone()
+                v_out = v.clone()
+            else:
+                k_out = k.expand(batch_size, -1, -1, -1).contiguous()
+                v_out = v.expand(batch_size, -1, -1, -1).contiguous()
+            sw = getattr(l, "_sliding_window_tensor", None)
+            new_data.append((k_out, v_out, sw) if sw is not None else (k_out, v_out))
+        return DynamicCache(ddp_cache_data=new_data)
+
+    # Legacy transformers: past_key_values.key_cache and value_cache
     if hasattr(past_key_values, "key_cache") and hasattr(past_key_values, "value_cache"):
-        from transformers.cache_utils import DynamicCache
         new_cache = DynamicCache()
         if batch_size == 1:
             new_cache.key_cache = [k.clone() for k in past_key_values.key_cache]
             new_cache.value_cache = [v.clone() for v in past_key_values.value_cache]
         else:
-            new_cache.key_cache = [
-                k.expand(batch_size, -1, -1, -1).contiguous()
-                for k in past_key_values.key_cache
-            ]
-            new_cache.value_cache = [
-                v.expand(batch_size, -1, -1, -1).contiguous()
-                for v in past_key_values.value_cache
-            ]
+            new_cache.key_cache = [k.expand(batch_size, -1, -1, -1).contiguous() for k in past_key_values.key_cache]
+            new_cache.value_cache = [v.expand(batch_size, -1, -1, -1).contiguous() for v in past_key_values.value_cache]
         if hasattr(past_key_values, "_seen_tokens"):
             new_cache._seen_tokens = past_key_values._seen_tokens
         return new_cache
-    elif isinstance(past_key_values, (tuple, list)):
+
+    # Tuple / list of (key, value) pairs
+    if isinstance(past_key_values, (tuple, list)):
         if batch_size == 1:
             return tuple((k.clone(), v.clone()) for k, v in past_key_values)
         return tuple(
             (k.expand(batch_size, -1, -1, -1).contiguous(), v.expand(batch_size, -1, -1, -1).contiguous())
             for k, v in past_key_values
         )
+
     return past_key_values
 
 
@@ -326,12 +338,21 @@ class DecisionModel(nn.Module):
 
         expanded_pkv = clone_or_expand_past_key_values(past_key_values, batch_size=B)
 
-        out = self.lm(
-            input_ids=ids,
-            position_ids=pos,
-            attention_mask=attn_mask,
-            past_key_values=expanded_pkv,
-        )
+        try:
+            out = self.lm(
+                input_ids=ids,
+                position_ids=pos,
+                attention_mask=attn_mask,
+                past_key_values=expanded_pkv,
+            )
+        except (RuntimeError, ValueError):
+            mask_payload = {"full_attention": attn_mask, "sliding_attention": attn_mask}
+            out = self.lm(
+                input_ids=ids,
+                position_ids=pos,
+                attention_mask=mask_payload,
+                past_key_values=expanded_pkv,
+            )
         hs = out.last_hidden_state.float()
 
         logits_list = []

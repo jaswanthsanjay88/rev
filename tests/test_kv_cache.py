@@ -133,6 +133,61 @@ def test_api_caching_simulation():
     assert client.get("/v1/state/cache").json()["total_entries"] == 0
 
 
+def test_dynamic_cache_cloning():
+    import torch
+    from transformers import Qwen2Config, Qwen2Model
+    from rev.model import clone_or_expand_past_key_values
+
+    cfg = Qwen2Config(
+        vocab_size=500,
+        hidden_size=64,
+        intermediate_size=128,
+        num_hidden_layers=2,
+        num_attention_heads=4,
+        num_key_value_heads=2,
+    )
+    model = Qwen2Model(cfg)
+    model.eval()
+
+    state_len = 50
+    ids_state = torch.randint(0, 500, (1, state_len))
+    pos_state = torch.arange(state_len).unsqueeze(0)
+    out_state = model(input_ids=ids_state, position_ids=pos_state, use_cache=True)
+    pkv = out_state.past_key_values
+
+    # Test single branch query cloning
+    q_len = 20
+    K_total = state_len + q_len
+    causal_branch = torch.tril(torch.ones((q_len, q_len), dtype=torch.bool))
+
+    for _ in range(3):
+        ids_q = torch.randint(0, 500, (1, q_len))
+        pos_q = torch.arange(state_len, state_len + q_len).unsqueeze(0)
+        mask_bool = torch.zeros((1, 1, q_len, K_total), dtype=torch.bool)
+        mask_bool[:, :, :, :state_len] = True
+        mask_bool[:, :, :, state_len:] = causal_branch[None, None, :, :]
+        attn_mask = torch.zeros((1, 1, q_len, K_total), dtype=torch.float32)
+        attn_mask.masked_fill_(~mask_bool, -1e4)
+
+        cached = clone_or_expand_past_key_values(pkv, batch_size=1)
+        out = model(input_ids=ids_q, position_ids=pos_q, attention_mask=attn_mask, past_key_values=cached)
+        assert out.last_hidden_state.shape == (1, q_len, 64)
+
+    # Test batched expansion (B=2)
+    B = 2
+    ids_b = torch.randint(0, 500, (B, q_len))
+    pos_b = torch.arange(state_len, state_len + q_len).unsqueeze(0).expand(B, -1)
+    mask_bool_b = torch.zeros((B, 1, q_len, K_total), dtype=torch.bool)
+    mask_bool_b[:, :, :, :state_len] = True
+    mask_bool_b[:, :, :, state_len:] = causal_branch[None, None, :, :]
+    attn_mask_b = torch.zeros((B, 1, q_len, K_total), dtype=torch.float32)
+    attn_mask_b.masked_fill_(~mask_bool_b, -1e4)
+
+    cached_b = clone_or_expand_past_key_values(pkv, batch_size=B)
+    out_b = model(input_ids=ids_b, position_ids=pos_b, attention_mask=attn_mask_b, past_key_values=cached_b)
+    assert out_b.last_hidden_state.shape == (B, q_len, 64)
+
+
 if __name__ == "__main__":
     print("Running test_lru_cache_manager...")
     test_lru_cache_manager()
@@ -141,5 +196,9 @@ if __name__ == "__main__":
     print("Running test_api_caching_simulation...")
     test_api_caching_simulation()
     print("[PASS] test_api_caching_simulation passed!")
+
+    print("Running test_dynamic_cache_cloning...")
+    test_dynamic_cache_cloning()
+    print("[PASS] test_dynamic_cache_cloning passed!")
     print("All KV-cache tests passed successfully!")
 
