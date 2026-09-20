@@ -313,46 +313,23 @@ class DecisionModel(nn.Module):
         lm_dtype = next(self.lm.parameters()).dtype
         K_total = state_len + L_max
 
-        # Base causal mask for branch queries [L_max, L_max]
-        causal_branch = torch.tril(torch.ones((L_max, L_max), dtype=torch.bool, device=self.device))
-
-        # 4D boolean mask [B, 1, L_max, K_total]
-        mask_bool = torch.zeros((B, 1, L_max, K_total), dtype=torch.bool, device=self.device)
-        # All queries attend to the full state prefix
-        mask_bool[:, :, :, :state_len] = True
-        # Within the branch, apply causal masking
-        mask_bool[:, :, :, state_len:] = causal_branch[None, None, :, :]
-
+        # Standard 2D attention mask across [state_prefix + question_branch]
+        # Hugging Face causal models natively expand 2D masks with past_key_values in SDPA
+        mask_2d = torch.zeros((B, K_total), dtype=torch.long, device=self.device)
+        mask_2d[:, :state_len] = 1
         for b, br in enumerate(branches):
             l = len(br["ids"])
             ids[b, :l] = torch.tensor(br["ids"], device=self.device)
             pos[b, :l] = torch.tensor(br["pos"], device=self.device)
-            if l < L_max:
-                mask_bool[b, :, :, state_len + l:] = False
-                mask_bool[b, :, l:, :] = False
-                for i in range(l, L_max):
-                    mask_bool[b, 0, i, state_len + i] = True
-
-        attn_mask = torch.zeros((B, 1, L_max, K_total), dtype=lm_dtype, device=self.device)
-        attn_mask.masked_fill_(~mask_bool, torch.finfo(lm_dtype).min)
+            mask_2d[b, state_len : state_len + l] = 1
 
         expanded_pkv = clone_or_expand_past_key_values(past_key_values, batch_size=B)
-
-        try:
-            out = self.lm(
-                input_ids=ids,
-                position_ids=pos,
-                attention_mask=attn_mask,
-                past_key_values=expanded_pkv,
-            )
-        except (RuntimeError, ValueError):
-            mask_payload = {"full_attention": attn_mask, "sliding_attention": attn_mask}
-            out = self.lm(
-                input_ids=ids,
-                position_ids=pos,
-                attention_mask=mask_payload,
-                past_key_values=expanded_pkv,
-            )
+        out = self.lm(
+            input_ids=ids,
+            position_ids=pos,
+            attention_mask=mask_2d,
+            past_key_values=expanded_pkv,
+        )
         hs = out.last_hidden_state.float()
 
         logits_list = []
