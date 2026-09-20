@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--epochs", type=int, default=3)
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--lora", type=int, default=16)
+    parser.add_argument("--head-dim", type=int, default=256)
+    parser.add_argument("--checkpointing", action="store_true", help="Enable gradient checkpointing for large models")
     parser.add_argument("--accum", type=int, default=4)
     parser.add_argument("--out", default="runs/rev")
     args = parser.parse_args()
@@ -38,7 +40,13 @@ def main():
     print(f"Training on: {dev} | Base: {args.base} | LoRA rank: {args.lora} | LR: {args.lr}")
 
     tok = AutoTokenizer.from_pretrained(args.base)
-    model = DecisionModel(base_name=args.base, lora_r=args.lora, device=dev)
+    model = DecisionModel(
+        base_name=args.base,
+        lora_r=args.lora,
+        head_dim=args.head_dim,
+        device=dev,
+        gradient_checkpointing=args.checkpointing,
+    )
 
     # Sample customer support / policy data for training
     train_data = [

@@ -202,6 +202,7 @@ class DecisionModel(nn.Module):
         head_dim=256,
         device="cuda" if torch.cuda.is_available() else "cpu",
         dtype=None,
+        gradient_checkpointing=False,
     ):
         super().__init__()
         self.device = device
@@ -210,7 +211,10 @@ class DecisionModel(nn.Module):
         self.head_dim = head_dim
 
         if dtype is None:
-            dtype = torch.bfloat16 if "cuda" in str(device) else torch.float32
+            if "cuda" in str(device):
+                dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+            else:
+                dtype = torch.float32
 
         # Backbone only (no lm_head): prefill only
         self.lm = AutoModelForCausalLM.from_pretrained(
@@ -218,6 +222,9 @@ class DecisionModel(nn.Module):
             attn_implementation="sdpa" if "cuda" in str(device) else "eager",
             dtype=dtype,
         ).model
+
+        if gradient_checkpointing:
+            self.lm.gradient_checkpointing_enable()
 
         if lora_r > 0:
             cfg = LoraConfig(
