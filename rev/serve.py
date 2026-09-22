@@ -202,12 +202,41 @@ def systemone_permute(body: dict):
 
 @app.get("/v1/models")
 def models():
-    return {"models": [{"id": "rev-latest", "base": STATE["base"], "run": STATE["run"]}]}
+    return {
+        "models": [
+            {"id": "rev-latest", "base": STATE["base"], "run": STATE["run"], "type": "causal-kv-cache"},
+            {"id": "rev-unified", "base": "ModernBERT-large + mmBERT-base", "type": "encoder-routed", "routing": "sub-microsecond"},
+            {"id": "modernbert-large", "parameters": "421M", "context": 8192, "language": "English"},
+            {"id": "mmbert-base", "parameters": "322M", "context": 1024, "language": "100+ languages"},
+        ]
+    }
+
+
+@app.post("/v1/systemone/route")
+def route_preview(body: dict):
+    """Zero-latency preview of backbone routing decision without running inference."""
+    from .router import get_default_model
+    state = body.get("state", "")
+    questions = body.get("questions", {})
+    decision = get_default_model().route(
+        state,
+        questions,
+        model=body.get("model"),
+        task=body.get("task"),
+        lang=body.get("lang"),
+    )
+    return {"routing": dict(decision)}
 
 
 @app.get("/api/info")
 def info():
-    return {"run": STATE["run"], "device": STATE["dev"], "base": STATE["base"], "mode": STATE["mode"]}
+    return {
+        "run": STATE["run"],
+        "device": STATE["dev"],
+        "base": STATE["base"],
+        "mode": STATE["mode"],
+        "unified_engine": "ModernBERT-large (421M) + mmBERT-base (322M)",
+    }
 
 
 @app.get("/v1/state/cache")

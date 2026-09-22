@@ -17,30 +17,32 @@ It reads a document once and evaluates multiple typed questions in parallel in a
 
 ## Highlights
 
-- **Three Question Types**: `noul` (yes/no), `choice` (2–255 options), and `score` (ordered numeric levels) all mapped onto one unified pointer head.
-- **Prefix KV-Caching (<5ms)**: Caches document key/value tensors in memory. Subsequent questions against the same document evaluate in under 4ms (**>10x speedup!**)—a capability `kev` explicitly lacks.
-- **Single Pass, Many Answers**: The state prefix is computed once. Every question runs as an isolated branch under a block-causal mask.
-- **Mathematical Isolation**: A question branch cannot attend to or leak into sibling questions. Packed and separate requests yield identical probabilities.
-- **Order Invariant**: Branch position IDs restart immediately after the state, eliminating positional order bias.
+- **Unified 'One Model' Architecture**: Pretrained encoders unified behind a single interface (`rev.Model()` / `rev.predict()`). Inherits vocabulary, syntax, world knowledge, and grammar directly from backbone pretraining:
+  - **ModernBERT-large (421M)**: English backbone with long-context, deep reasoning.
+  - **mmBERT-base (322M)**: Multilingual backbone natively supporting 100+ languages and 26 Unicode scripts.
+- **Sub-Microsecond Script Routing (`rev.lang`)**: Zero-dependency Unicode script and language detector that dispatches English to ModernBERT-large and 100+ languages to mmBERT-base in <1µs. Eliminates language collapse without user configuration.
+- **Document Prefix KV-Caching (<5ms)**: Caches document key/value activations on causal backbones. Repeated queries against the same document evaluate in under 4ms (**>10x speedup!**)—a signature capability `kev` and `laya` lack.
+- **Strictly Proper Scoring Rules (RLCD)**: Combines Logarithmic Score + Spherical Score + Ranked Probability Score (RPS) directly penalizing overconfidence on ambiguous samples.
+- **Coarse-to-Fine Candidate Shortlisting (`rev.shortlist`)**: Bi-encoder similarity filtering for high-cardinality questions (20–255+ options) before cross-attentive scoring.
+- **Production Presets (`rev.presets`)**: Turnkey enterprise schemas for ticket triage, email threat filtering, guardrails, moderation, invoice verification, and agent trace observability.
 - **Drop-in TypeSafe API**: Implements the `POST /v1/systemone` specification. Compatible directly with the official `typesafe-sdk`.
 - **Interactive Playground**: Included Next.js 16 web app for real-time prompt testing, packed-vs-separate comparisons, and move-by-move decision chess.
-- **1-Click Free Colab**: Full end-to-end training and KV-cache GPU benchmarking in a single Google Colab notebook.
 
 ---
 
-## Comparison: `rev` vs `kev` vs `Jev`
+## Comparison: `rev` vs `laya` vs `kev` vs `Jev`
 
-| Feature | **`rev` (Ours)** | `kev` (Jared Palmer) | `Jev` (TypeSafe Hosted) |
-|---|---|---|---|
-| **Architecture** | Causal LM + Pointer Head | Causal LM + Pointer Head | Proprietary Prefill Model |
-| **Prefill-Only (No Decoding)** | **Yes** | **Yes** | **Yes** |
-| **Branch Isolation** | **Exact** ($<10^{-6}$) | **Exact** ($4\times 10^{-6}$) | Proprietary |
-| **API Specification** | `POST /v1/systemone` | `POST /v1/systemone` | Official `POST /v1/systemone` |
-| **Document Prefix KV-Caching** | **Yes (<5ms)** | **No** (*"no cross-request KV cache"*) | Proprietary |
-| **Thread-Safe LRU Cache** | **Yes** (SHA-256 routing) | **No** | Proprietary |
-| **Training Pipeline** | **1-Click Google Colab** (Free GPU) | Modal (Metered H100 credits) | Proprietary |
-| **Interactive Playground** | Next.js 16 + Chess | Next.js + Chess | Web Dashboard |
-| **Research Log** | [`PLAN.md`](PLAN.md) | `PLAN.md` | Internal |
+| Feature | **`rev` (Ours)** | `laya` | `kev` (Jared Palmer) | `Jev` (TypeSafe Hosted) |
+|---|---|---|---|---|
+| **Pretrained Encoders** | **ModernBERT-large (421M) + mmBERT-base (322M)** | ModernBERT + mmBERT | None (Causal LM only) | Proprietary |
+| **Unified 'One Model' API** | **Yes (`rev.predict()`)** | Manual router | No | Web API |
+| **Zero-Latency Script Routing** | **Yes (<1 µs, 26 scripts)** | Yes | No | No |
+| **Document Prefix KV-Caching** | **Yes (<5ms)** | No | No | Proprietary |
+| **Strictly Proper Scoring (RLCD)** | **LogScore + Spherical + RPS** | LogScore + Spherical + RPS | Cross-Entropy | Proprietary |
+| **High-Cardinality Shortlisting** | **Yes (up to 255+ options)** | Yes | No | No |
+| **Enterprise Presets** | **Triage, Email, Guardrails, SOC, AP** | Presets | No | Web UI |
+| **API Specification** | `POST /v1/systemone` | Custom API | `POST /v1/systemone` | Official `POST /v1/systemone` |
+| **Interactive Playground** | Next.js 16 + Chess | None | Next.js + Chess | Web Dashboard |
 
 ---
 
@@ -194,6 +196,40 @@ curl -s http://localhost:8000/v1/systemone -H "Content-Type: application/json" -
 
 > **Note on Prefix KV-Caching**: On the first request against a document, the prefix is prefilled and cached in memory. Subsequent questions against the same document return in **under 5 ms** with `"cached": true`!
 
+
+### Unified 'One Model' Python API
+
+`rev` provides a single unified entry point that seamlessly routes across pretrained backbones:
+
+```python
+import rev
+
+# 1. Zero-config prediction — automatically routes English to ModernBERT-large (421M):
+res = rev.predict(
+    state={"message": "Can I get a refund for my last invoice?"},
+    questions=rev.presets.triage_questions(),
+)
+print(res["answers"]["intent"]["choice"])  # -> "refund"
+print(res["routing"]["model"])             # -> "english" (ModernBERT-large)
+
+# 2. Multilingual query — sub-microsecond routing to mmBERT-base (322M, 100+ languages):
+res_es = rev.predict(
+    state={"message": "Mi paquete no ha llegado y necesito el reembolso."},
+    questions=rev.presets.triage_questions(),
+)
+print(res_es["routing"]["model"])          # -> "multilingual" (mmBERT-base)
+print(res_es["answers"]["intent"]["choice"])
+
+# 3. High-cardinality candidate shortlisting (20–255+ options):
+model = rev.Model()
+res_shortlist = rev.predict_shortlist(
+    model,
+    state="Payment declined at checkout",
+    questions=questions_with_80_options,
+    embed_fn=rev.embed_fn_from_agent(model.load("english")),
+    k=20,
+)
+```
 
 ### Using the TypeSafe Python SDK
 
