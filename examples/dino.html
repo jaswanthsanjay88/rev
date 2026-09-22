@@ -12,28 +12,30 @@
    found in the LICENSE file. */
 
 :root {
-  --bg-dark: #090d16;
-  --panel-bg: #121826;
-  --border-color: #212c45;
-  --accent-cyan: #00f0ff;
-  --accent-green: #00ff88;
-  --accent-amber: #ffcc00;
-  --text-main: #e2e8f0;
-  --text-muted: #8492a6;
-  --mono-font: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  --bg-page: #000000;
+  --bg-card: #09090b;
+  --bg-card-subtle: #141416;
+  --border-color: #27272a;
+  --border-subtle: #18181b;
+  --text-main: #ffffff;
+  --text-sub: #a1a1aa;
+  --text-muted: #71717a;
+  --mono-font: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --sans-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
-  background-color: var(--bg-dark);
+  background-color: var(--bg-page);
   color: var(--text-main);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--sans-font);
   margin: 0;
-  padding: 20px;
+  padding: 24px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   min-height: 100vh;
   box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Header & HUD Bar */
@@ -44,8 +46,8 @@ body {
   justify-content: space-between;
   align-items: center;
   padding-bottom: 16px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .rev-brand {
@@ -55,44 +57,50 @@ body {
 }
 
 .rev-badge {
-  background: linear-gradient(135deg, #00f0ff, #0077ff);
-  color: #000;
-  font-weight: 900;
-  font-size: 15px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  letter-spacing: 1px;
+  background: #ffffff;
+  color: #000000;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  text-transform: lowercase;
+  font-family: var(--mono-font);
 }
 
 .rev-title {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.2px;
 }
 
 .rev-subtitle {
   font-size: 12px;
   color: var(--text-muted);
+  margin-top: 2px;
 }
 
 .hud-pill-group {
   display: flex;
-  gap: 12px;
-}
-
-.hud-pill {
-  background: var(--panel-bg);
-  border: 1px solid var(--border-color);
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
   gap: 8px;
 }
 
+.hud-pill {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .hud-pill span.val {
-  color: var(--accent-cyan);
-  font-weight: 700;
+  color: #ffffff;
+  font-weight: 600;
   font-family: var(--mono-font);
 }
 
@@ -100,46 +108,47 @@ body {
 .game-viewport-card {
   width: 100%;
   max-width: 800px;
-  background: #f7f7f7;
-  border: 2px solid var(--border-color);
-  border-radius: 12px;
+  background: #000000;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9);
   position: relative;
 }
 
 .game-top-bar {
-  background: #1a2234;
-  color: #94a3b8;
-  padding: 10px 16px;
-  font-size: 12px;
+  background: var(--bg-card);
+  color: var(--text-sub);
+  padding: 9px 14px;
+  font-size: 11px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-subtle);
   font-family: var(--mono-font);
+  letter-spacing: 0.5px;
 }
 
 .pulse-indicator {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent-green);
+  background: #ffffff;
   display: inline-block;
-  margin-right: 6px;
-  animation: pulse-glow 1.5s infinite;
+  margin-right: 8px;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+  animation: pulse-glow 2s infinite ease-in-out;
 }
 
 @keyframes pulse-glow {
-  0% { opacity: 0.4; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.2); }
-  100% { opacity: 0.4; transform: scale(0.9); }
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
 }
 
 /* Original Chromium Game Stage Area */
 .stage-area {
-  background: #f7f7f7;
-  min-height: 220px;
+  background: #000000;
+  height: 150px;
   position: relative;
   display: flex;
   justify-content: center;
@@ -149,11 +158,10 @@ body {
 
 .interstitial-wrapper {
   box-sizing: border-box;
-  font-size: 1em;
-  line-height: 1.55;
-  margin: 15px auto;
+  margin: 0 auto;
   max-width: 600px;
   width: 100%;
+  height: 150px;
   position: relative;
 }
 
@@ -162,7 +170,8 @@ body {
   max-width: 600px;
   overflow: hidden;
   position: absolute;
-  top: 10px;
+  top: 0;
+  left: 0;
   width: 44px;
   z-index: 2;
 }
@@ -174,56 +183,74 @@ body {
   overflow: hidden;
   position: absolute;
   top: 0;
+  left: 0;
+  filter: invert(1);
 }
 
 /* Telemetry Dashboard Grid */
 .telemetry-grid {
   width: 100%;
   max-width: 800px;
-  margin-top: 20px;
+  margin-top: 14px;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px;
 }
 
 .telemetry-panel {
-  background: var(--panel-bg);
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 18px;
+  border-radius: 8px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .panel-header {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
   color: var(--text-muted);
-  font-weight: 700;
+  font-weight: 600;
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono-font);
 }
 
 .decision-box {
-  background: #080c14;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 16px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 14px;
   text-align: center;
 }
 
 .decision-action {
-  font-size: 34px;
+  font-size: 30px;
   font-weight: 900;
   font-family: var(--mono-font);
   letter-spacing: 2px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.1s ease;
 }
 
-.action-RUN { color: #58a6ff; }
-.action-JUMP { color: #3fb950; text-shadow: 0 0 16px rgba(63, 185, 80, 0.6); }
+.action-RUN {
+  color: #ffffff;
+}
+
+.action-JUMP {
+  color: #000000;
+  background: #ffffff;
+  padding: 2px 18px;
+  border-radius: 4px;
+  display: inline-block;
+  letter-spacing: 3px;
+}
 
 .prob-container {
   display: flex;
@@ -234,117 +261,125 @@ body {
 .prob-row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .prob-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11px;
   font-family: var(--mono-font);
+  color: var(--text-sub);
 }
 
 .prob-bar-track {
   width: 100%;
-  height: 8px;
-  background: #1c263c;
-  border-radius: 4px;
+  height: 6px;
+  background: #18181b;
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .prob-bar-fill {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 3px;
   transition: width 0.08s ease;
 }
 
-.fill-run { background: #58a6ff; }
-.fill-jump { background: #3fb950; }
+.fill-run { background: #ffffff; }
+.fill-jump { background: #a1a1aa; }
 
 .radar-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .radar-cell {
-  background: #080c14;
-  border: 1px solid var(--border-color);
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  padding: 10px;
+  padding: 9px 12px;
 }
 
 .radar-cell .lbl {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
-  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+  font-family: var(--mono-font);
+  margin-bottom: 3px;
 }
 
 .radar-cell .val {
-  font-size: 15px;
+  font-size: 14px;
   font-family: var(--mono-font);
-  font-weight: 700;
+  font-weight: 600;
+  color: #ffffff;
 }
 
 .controls-bar {
   width: 100%;
   max-width: 800px;
-  margin-top: 16px;
+  margin-top: 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
 .btn {
-  background: #1a2338;
-  color: var(--text-main);
+  background: transparent;
+  color: #ffffff;
   border: 1px solid var(--border-color);
-  padding: 9px 18px;
+  padding: 8px 16px;
   border-radius: 6px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
+  font-family: var(--sans-font);
 }
 
 .btn:hover {
-  background: #253350;
-  border-color: var(--accent-cyan);
+  background: var(--bg-card-subtle);
+  border-color: #3f3f46;
 }
 
 .btn-accent {
-  background: var(--accent-cyan);
-  color: #000;
-  border: none;
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  font-weight: 600;
 }
 
 .btn-accent:hover {
-  background: #33f3ff;
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+  background: #e4e4e7;
+  border-color: #e4e4e7;
 }
 
 /* Collapsible JSON Inspector */
 .json-inspector {
   width: 100%;
   max-width: 800px;
-  margin-top: 16px;
-  background: var(--panel-bg);
+  margin-top: 14px;
+  background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 14px 18px;
+  border-radius: 8px;
+  padding: 12px 16px;
   font-family: var(--mono-font);
   font-size: 12px;
+  box-sizing: border-box;
 }
 
 pre.code-view {
-  background: #080c14;
-  border: 1px solid var(--border-color);
+  background: #000000;
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 12px;
   overflow-x: auto;
-  color: #79c0ff;
+  color: #a1a1aa;
   margin-top: 10px;
+  line-height: 1.5;
 }
 
 #offline-resources {
@@ -1315,9 +1350,9 @@ Horizon.prototype = {
     <div class="game-top-bar">
       <div>
         <span class="pulse-indicator"></span>
-        <span id="ai-status-label" style="color:var(--text-main); font-weight:700;">rev AI AUTOPILOT ACTIVE</span>
+        <span id="ai-status-label" style="color:var(--text-main); font-weight:600;">REV AUTOPILOT ACTIVE</span>
       </div>
-      <div>Chromium Engine v2014 // Canvas 600x150</div>
+      <div>CHROMIUM ENGINE // 600×150 CANVAS</div>
     </div>
 
     <div class="stage-area">
@@ -1331,13 +1366,13 @@ Horizon.prototype = {
     <div class="telemetry-panel">
       <div class="panel-header">
         <span>Neural Decision Readout</span>
-        <span style="color:var(--accent-cyan);">POST /v1/systemone</span>
+        <span style="color:var(--text-muted); font-size:11px;">POST /v1/systemone</span>
       </div>
 
       <div class="decision-box">
         <div class="decision-action action-RUN" id="hud-action">RUN</div>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:6px; font-family:var(--mono-font);">
-          Confidence: <strong style="color:#fff;" id="hud-conf">99.1%</strong> • Urgency: <strong style="color:#fff;" id="hud-urg">0.04</strong>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:8px; font-family:var(--mono-font);">
+          Confidence: <strong style="color:#ffffff;" id="hud-conf">99.1%</strong> · Urgency: <strong style="color:#ffffff;" id="hud-urg">0.04</strong>
         </div>
       </div>
 
@@ -1369,7 +1404,7 @@ Horizon.prototype = {
     <div class="telemetry-panel">
       <div class="panel-header">
         <span>Real-Time Sensor Radar</span>
-        <span style="color:var(--accent-green);">16.6ms Tick</span>
+        <span style="color:var(--text-muted); font-size:11px;">60 FPS // 16.6ms</span>
       </div>
 
       <div class="radar-stats">
@@ -1387,12 +1422,12 @@ Horizon.prototype = {
         </div>
         <div class="radar-cell">
           <div class="lbl">Threat Assessment</div>
-          <div class="val" id="radar-threat" style="color:var(--accent-green);">0.0 (CLEAR)</div>
+          <div class="val" id="radar-threat">CLEAR</div>
         </div>
       </div>
 
       <div style="margin-top:auto; font-size:11px; color:var(--text-muted); line-height:1.4;">
-        * <strong style="color:var(--text-main);">rev</strong> uses prefill-only option-marker pooling to compute jump decisions in sub-4ms without autoregressive text decoding.
+        * <strong style="color:#ffffff;">rev</strong> uses prefill-only option-marker pooling to compute jump decisions in sub-4ms without autoregressive decoding.
       </div>
     </div>
   </div>
@@ -1404,14 +1439,14 @@ Horizon.prototype = {
       <button class="btn" id="btn-toggle-pilot">Switch to Manual Control</button>
     </div>
     <div style="font-size:12px; color:var(--text-muted); font-family:var(--mono-font);">
-      Manual: <kbd style="background:#1a2338; padding:2px 6px; border-radius:4px; color:#fff;">Space</kbd> Jump
+      Manual: <kbd style="background:#141416; border:1px solid #27272a; padding:2px 6px; border-radius:4px; color:#a1a1aa; font-family:var(--mono-font); font-size:11px;">SPACE</kbd> Jump
     </div>
   </div>
 
   <!-- Collapsible Raw Payload Inspector -->
   <div class="json-inspector">
     <div style="display:flex; justify-content:space-between; cursor:pointer;" onclick="toggleJson()">
-      <span style="font-weight:700; color:var(--accent-cyan);">▶ Live System One Request & Answer Payload</span>
+      <span style="font-weight:600; color:#ffffff;">▶ Live System 1 Request & Answer Payload</span>
       <span style="color:var(--text-muted); font-size:11px;">Click to toggle</span>
     </div>
     <pre class="code-view" id="live-payload" style="display:none;"></pre>
@@ -1494,14 +1529,14 @@ Horizon.prototype = {
       if (runner.crashed && autopilotActive && !autoRestartPending) {
         autoRestartPending = true;
         document.getElementById('ai-status-label').textContent = "CRASH DETECTED — RESTARTING";
-        document.getElementById('ai-status-label').style.color = "var(--accent-amber)";
+        document.getElementById('ai-status-label').style.color = "#71717a";
         setTimeout(function() {
           if (runner.crashed) {
             runner.restart();
           }
           autoRestartPending = false;
-          document.getElementById('ai-status-label').textContent = "rev AI AUTOPILOT ACTIVE";
-          document.getElementById('ai-status-label').style.color = "var(--text-main)";
+          document.getElementById('ai-status-label').textContent = "REV AUTOPILOT ACTIVE";
+          document.getElementById('ai-status-label').style.color = "#ffffff";
         }, 800);
       }
 
@@ -1604,15 +1639,15 @@ Horizon.prototype = {
         document.getElementById('radar-obs-type').textContent = data.obsType;
         document.getElementById('radar-dist').textContent = data.distance + ' px';
         document.getElementById('radar-tti').textContent = data.tti + ' ms';
-        var threatText = data.threat > 2.0 ? '3.0 [CRITICAL]' : (data.threat > 1.0 ? '1.5 [DANGER]' : '0.0 [CLEAR]');
+        var threatText = data.threat > 2.0 ? 'CRITICAL' : (data.threat > 1.0 ? 'WARNING' : 'CLEAR');
         document.getElementById('radar-threat').textContent = threatText;
-        document.getElementById('radar-threat').style.color = data.threat > 2.0 ? 'var(--accent-amber)' : 'var(--accent-green)';
+        document.getElementById('radar-threat').style.color = data.threat > 2.0 ? '#ffffff' : (data.threat > 1.0 ? '#a1a1aa' : '#71717a');
       } else {
         document.getElementById('radar-obs-type').textContent = 'NONE';
         document.getElementById('radar-dist').textContent = '--- px';
         document.getElementById('radar-tti').textContent = '--- ms';
-        document.getElementById('radar-threat').textContent = '0.0 [CLEAR]';
-        document.getElementById('radar-threat').style.color = 'var(--accent-green)';
+        document.getElementById('radar-threat').textContent = 'CLEAR';
+        document.getElementById('radar-threat').style.color = '#71717a';
       }
 
       var payload = {
@@ -1637,12 +1672,12 @@ Horizon.prototype = {
       autopilotActive = !autopilotActive;
       if (autopilotActive) {
         pilotBtn.textContent = "Switch to Manual Control";
-        document.getElementById('ai-status-label').textContent = "rev AI AUTOPILOT ACTIVE";
-        document.getElementById('ai-status-label').style.color = "var(--text-main)";
+        document.getElementById('ai-status-label').textContent = "REV AUTOPILOT ACTIVE";
+        document.getElementById('ai-status-label').style.color = "#ffffff";
       } else {
         pilotBtn.textContent = "Engage rev AI Autopilot";
         document.getElementById('ai-status-label').textContent = "MANUAL CONTROL ENGAGED";
-        document.getElementById('ai-status-label').style.color = "var(--accent-amber)";
+        document.getElementById('ai-status-label').style.color = "#71717a";
       }
     });
 
