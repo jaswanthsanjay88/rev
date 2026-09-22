@@ -289,9 +289,9 @@ def main():
 
     base_name = "Qwen/Qwen2.5-0.5B"
     dev = "cuda" if (HAS_NEURAL and torch.cuda.is_available()) else "cpu"
-    run_dir = resolve_run(args.run)
 
     if HAS_NEURAL and not args.mock:
+        run_dir = resolve_run(args.run)
         if os.path.exists(f"{run_dir}/head.pt"):
             meta = torch.load(f"{run_dir}/head.pt", map_location="cpu")
             base_name = meta.get("base", base_name)

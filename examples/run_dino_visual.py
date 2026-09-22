@@ -46,9 +46,9 @@ def main():
     else:
         print(f"[*] Starting rev inference server on http://localhost:{port}...")
         python_exe = sys.executable
-        # Launch rev.serve in background
+        # Launch rev.serve in background (fast mode)
         proc = subprocess.Popen(
-            [python_exe, "-m", "rev.serve", "--port", str(port)],
+            [python_exe, "-m", "rev.serve", "--port", str(port), "--mock"],
             cwd=str(Path(__file__).parent.parent),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
