@@ -38,8 +38,8 @@ def get_dino_questions() -> Dict[str, Any]:
                 "Consider the obstacle type, altitude, and time to impact."
             ),
             "criteria": {
-                "RUN": "Track ahead is clear, obstacle is far away (>140px), or Dino is safely in mid-air.",
-                "JUMP": "Ground obstacle (cactus or low-flying pterodactyl) is close (distance <= 120px) requiring jumping over it.",
+                "RUN": "Track ahead is clear, obstacle is far away (>110px), or Dino is safely in mid-air.",
+                "JUMP": "Ground obstacle (single cactus, double/triple cluster, or low-flying pterodactyl) is in immediate jump range: <=85px for single cactus, <=55px for double or triple cluster to clear trailing edge.",
                 "DUCK": "Mid-height flying pterodactyl approaching overhead that would collide with a standing Dino but clears when ducking.",
             },
         },
@@ -109,14 +109,17 @@ class DinoGameSimulator:
             }
         else:
             size = random.choice(["small", "large"])
+            cluster = random.choice([1, 2, 3])
+            unit_w = 17 if size == "small" else 25
             h = 35 if size == "small" else 50
             obs = {
-                "type": f"CACTUS_{size.upper()}",
+                "type": f"CACTUS_{size.upper()}" + (f"_{cluster}X" if cluster > 1 else ""),
                 "altitude": "ground",
                 "x": 600,
                 "y": 0,
-                "width": 25 if size == "small" else 35,
+                "width": unit_w * cluster,
                 "height": h,
+                "cluster": cluster,
             }
         self.obstacles.append(obs)
 
@@ -197,6 +200,8 @@ class DinoGameSimulator:
                 "distance_px": distance_px,
                 "time_to_impact_ms": time_to_impact_ms,
                 "obstacle_height_px": next_obs["height"],
+                "obstacle_width_px": next_obs["width"],
+                "cluster": next_obs.get("cluster", 1),
             }
         else:
             obs_info = {
@@ -205,6 +210,8 @@ class DinoGameSimulator:
                 "distance_px": 999.0,
                 "time_to_impact_ms": 9999.0,
                 "obstacle_height_px": 0,
+                "obstacle_width_px": 0,
+                "cluster": 0,
             }
 
         return {
@@ -225,10 +232,11 @@ def format_state_for_rev(telemetry: Dict[str, Any]) -> str:
     obs = telemetry["incoming_obstacle"]
     speed = telemetry["game_speed"]
 
+    cluster_str = f", cluster={obs.get('cluster', 1)}x (width={obs.get('obstacle_width_px', 25)}px)" if "CACTUS" in obs['type'] else ""
     return (
         f"Game Speed: {speed:.1f} px/frame. "
         f"Dino status: altitude={dino['altitude_px']:.0f}px, jumping={dino['is_jumping']}, ducking={dino['is_ducking']}. "
-        f"Next Obstacle: type={obs['type']}, altitude={obs['altitude']}, "
+        f"Next Obstacle: type={obs['type']}{cluster_str}, altitude={obs['altitude']}, "
         f"distance={obs['distance_px']:.0f}px, time_to_impact={obs['time_to_impact_ms']:.0f}ms."
     )
 

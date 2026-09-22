@@ -1560,9 +1560,13 @@ Horizon.prototype = {
       var obsType = "NONE";
       var tti = 9999;
 
+      var obsSize = 1;
+      var obsWidth = 25;
       if (nextObs) {
         distance = Math.round(nextObs.xPos - (tRexX + tRexWidth));
         obsType = nextObs.typeConfig.type;
+        obsSize = nextObs.size || 1;
+        obsWidth = nextObs.width || (nextObs.typeConfig.width * obsSize);
         tti = Math.max(0, Math.round((distance / speed) * (1000 / 60)));
       }
 
@@ -1574,9 +1578,13 @@ Horizon.prototype = {
       var threat = 0.0;
 
       if (nextObs && distance > 0 && distance < 260) {
-        // Jump threshold tailored to Chromium Runner gravity (0.6) and initial jump velocity (-10):
-        // As speed scales from 6 to 12+, trigger distance adapts:
-        var jumpTrigger = Math.round(speed * 11.2 + (nextObs.size > 1 ? 22 : 0));
+        // Precise jump timing calibrated to Chromium Runner physics:
+        // v0 = -10, g = 0.6 -> ~35 frames of airtime.
+        // For wider obstacles (double & triple cacti), jumping too early causes landing on the back.
+        // Calibrated formula adjusts trigger distance dynamically by obstacle width:
+        var jumpTrigger = Math.round((speed * 10.5) - (obsWidth - 20) * 0.45);
+        var minSafeDist = Math.round(Math.max(18, speed * 3.2));
+        if (jumpTrigger < minSafeDist) jumpTrigger = minSafeDist;
 
         if (distance <= jumpTrigger) {
           action = "JUMP";
@@ -1591,8 +1599,8 @@ Horizon.prototype = {
           }
         } else {
           action = "RUN";
-          threat = 1.3;
-          urgency = 0.45;
+          threat = distance < (jumpTrigger + 40) ? 1.8 : 0.6;
+          urgency = distance < (jumpTrigger + 40) ? 0.65 : 0.20;
         }
       }
 
@@ -1610,6 +1618,8 @@ Horizon.prototype = {
         urgency: urgency,
         threat: threat,
         obsType: obsType,
+        obsSize: obsSize,
+        obsWidth: obsWidth,
         distance: distance,
         tti: tti
       });
@@ -1636,7 +1646,8 @@ Horizon.prototype = {
       document.getElementById('bar-jump').style.width = (data.p_jump * 100) + '%';
 
       if (data.obsType !== "NONE") {
-        document.getElementById('radar-obs-type').textContent = data.obsType;
+        var label = data.obsType + (data.obsSize > 1 ? ' [' + data.obsSize + 'x]' : '');
+        document.getElementById('radar-obs-type').textContent = label;
         document.getElementById('radar-dist').textContent = data.distance + ' px';
         document.getElementById('radar-tti').textContent = data.tti + ' ms';
         var threatText = data.threat > 2.0 ? 'CRITICAL' : (data.threat > 1.0 ? 'WARNING' : 'CLEAR');
