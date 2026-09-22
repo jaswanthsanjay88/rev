@@ -1,26 +1,68 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "rev"
-version = "0.1.0"
-description = "Prefill-only decision model with TypeSafe System One API"
+name = "rev-decision"
+version = "0.2.0"
+description = "Fast, non-autoregressive System 1 decision engine with calibrated probabilities and sub-microsecond routing"
 readme = "README.md"
-requires-python = ">=3.11"
-license = "Apache-2.0"
-license-files = ["LICENSE"]
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Jaswanth Sanjay", email = "jaswanthsanjay88@gmail.com" }
+]
+keywords = [
+    "decision-model",
+    "system-one",
+    "non-autoregressive",
+    "rlcd",
+    "calibration",
+    "modernbert",
+    "routing",
+    "guardrails",
+    "triage",
+    "typesafe"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
-    "torch",
+    "torch>=2.0.0",
     "transformers>=4.48.0",
-    "peft>=0.14.0",
-    "datasets>=3.0.0",
-    "accelerate>=1.0.0",
+    "safetensors>=0.4.0",
+    "huggingface_hub>=0.20.0",
+    "numpy>=1.20.0",
     "pydantic>=2.8.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
-    "numpy",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
-    "pyngrok>=7.0.0",
+    "accelerate>=1.0.0",
+    "peft>=0.14.0",
+    "datasets>=3.0.0",
 ]
+
+[project.scripts]
+rev-server = "rev.serve:main"
+
+[tool.setuptools]
+packages = ["rev"]
+
+[project.urls]
+Homepage = "https://github.com/jaswanthsanjay88/rev"
+Repository = "https://github.com/jaswanthsanjay88/rev"
+Model = "https://huggingface.co/jaswanthsanjay88/rev-decision-model"
