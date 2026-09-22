@@ -11,6 +11,7 @@ import random
 import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from .api import SystemOneRequest, to_record, to_answers
 
@@ -254,6 +255,16 @@ def cache_clear(state_hash: str = None):
     else:
         CACHE.clear()
         return {"cleared": True}
+
+
+@app.get("/dino", response_class=HTMLResponse)
+def dino_page():
+    """Serves the live interactive Chrome Dino autonomous agent."""
+    html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "dino.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return HTMLResponse("<h1>Dino game not found at examples/dino.html</h1>", status_code=404)
 
 
 def resolve_run(run: str) -> str:

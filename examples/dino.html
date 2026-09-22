@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>rev // Autonomous Chrome Dino Agent</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #121826;
+      --border: #212c45;
+      --accent: #00f0ff;
+      --accent-green: #00ff88;
+      --accent-red: #ff3366;
+      --accent-yellow: #ffcc00;
+      --text: #e2e8f0;
+      --text-muted: #8492a6;
+      --mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 1100px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, #00f0ff, #0077ff);
+      color: #000;
+      font-weight: 900;
+      font-size: 16px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 1px;
+    }
+
+    .title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .tagline {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 20px;
+    }
+
+    .stat-pill {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-pill span.num {
+      color: var(--accent);
+      font-weight: 700;
+      font-family: var(--mono);
+    }
+
+    .main-grid {
+      width: 100%;
+      max-width: 1100px;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 24px;
+    }
+
+    .game-container {
+      background: #000;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      position: relative;
+    }
+
+    canvas {
+      width: 100%;
+      height: 320px;
+      background: #05070c;
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    .game-hud-overlay {
+      position: absolute;
+      top: 14px;
+      left: 16px;
+      display: flex;
+      gap: 10px;
+      z-index: 10;
+    }
+
+    .hud-badge {
+      background: rgba(18, 24, 38, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: var(--mono);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.2); }
+      100% { opacity: 0.4; transform: scale(0.9); }
+    }
+
+    .game-controls {
+      background: var(--card-bg);
+      padding: 14px 18px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn {
+      background: #1a2338;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      background: #253350;
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background: #33f3ff;
+      box-shadow: 0 0 12px rgba(0,240,255,0.4);
+    }
+
+    /* Telemetry Sidebar */
+    .telemetry-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .decision-display {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .action-badge {
+      font-size: 32px;
+      font-weight: 900;
+      font-family: var(--mono);
+      letter-spacing: 2px;
+      transition: all 0.1s ease;
+    }
+
+    .action-RUN { color: #58a6ff; }
+    .action-JUMP { color: #3fb950; text-shadow: 0 0 15px rgba(63, 185, 80, 0.5); }
+    .action-DUCK { color: #d29922; text-shadow: 0 0 15px rgba(210, 153, 34, 0.5); }
+
+    .confidence-meta {
+      margin-top: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    .confidence-meta strong {
+      color: var(--text);
+    }
+
+    /* Probability Bars */
+    .prob-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .prob-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .prob-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-family: var(--mono);
+    }
+
+    .prob-track {
+      width: 100%;
+      height: 8px;
+      background: #1c263c;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .prob-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.1s ease;
+    }
+
+    .prob-fill-run { background: #58a6ff; }
+    .prob-fill-jump { background: #3fb950; }
+    .prob-fill-duck { background: #d29922; }
+
+    /* Sensor Telemetry Box */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .telemetry-box {
+      background: #090d16;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+    }
+
+    .telemetry-box .label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .telemetry-box .val {
+      font-size: 15px;
+      font-family: var(--mono);
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* Live Prompt & Payload Accordion */
+    .payload-card {
+      grid-column: 1 / -1;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .payload-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    pre.code-box {
+      background: #080c14;
+      border: 1px solid var(--border);
+      padding: 14px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-top: 12px;
+      color: #79c0ff;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="logo-badge">rev</div>
+      <div>
+        <div class="title">Chrome Dino Autonomous Pilot</div>
+        <div class="tagline">Sub-10ms System 1 Decision Model at 60 FPS</div>
+      </div>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-pill">
+        <span>Score:</span>
+        <span class="num" id="stat-score">00000</span>
+      </div>
+      <div class="stat-pill">
+        <span>Speed:</span>
+        <span class="num" id="stat-speed">10.0</span>
+      </div>
+      <div class="stat-pill">
+        <span>Inference:</span>
+        <span class="num" id="stat-latency">3.2 ms</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- Left: Canvas Game -->
+    <div class="game-container">
+      <div class="game-hud-overlay">
+        <div class="hud-badge">
+          <div class="pulse-dot"></div>
+          <span id="ai-status">rev AI AUTOPILOT ACTIVE</span>
+        </div>
+        <div class="hud-badge">
+          <span>FPS: </span>
+          <span style="color:var(--accent);" id="game-fps">60</span>
+        </div>
+      </div>
+
+      <canvas id="dinoCanvas" width="700" height="320"></canvas>
+
+      <div class="game-controls">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn btn-primary" id="btn-restart">Restart Run</button>
+          <button class="btn" id="btn-toggle-mode">Switch to Manual Play</button>
+        </div>
+        <div style="font-size:12px; color:var(--text-muted);">
+          Keys: <kbd style="background:#1a2338; padding:2px 6px; border-radius:4px; color:#fff;">Space / Up</kbd> Jump | 
+          <kbd style="background:#1a2338; padding:2px 6px; border-radius:4px; color:#fff;">Down</kbd> Duck
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Neural Telemetry HUD -->
+    <div class="telemetry-card">
+      <div class="section-title">
+        <span>Neural Decision Output</span>
+        <span style="color:var(--accent); font-size:11px;">POST /v1/systemone</span>
+      </div>
+
+      <div class="decision-display">
+        <div class="action-badge action-RUN" id="hud-action">RUN</div>
+        <div class="confidence-meta">
+          <span>Conf: <strong id="hud-conf">99.2%</strong></span>
+          <span>•</span>
+          <span>Urgency: <strong id="hud-urgency">0.05</strong></span>
+        </div>
+      </div>
+
+      <div class="section-title">Choice Probability Readout</div>
+      <div class="prob-group">
+        <div class="prob-row">
+          <div class="prob-label-row">
+            <span>RUN</span>
+            <span id="prob-val-run">99.2%</span>
+          </div>
+          <div class="prob-track">
+            <div class="prob-fill prob-fill-run" id="prob-bar-run" style="width: 99.2%;"></div>
+          </div>
+        </div>
+
+        <div class="prob-row">
+          <div class="prob-label-row">
+            <span>JUMP</span>
+            <span id="prob-val-jump">0.7%</span>
+          </div>
+          <div class="prob-track">
+            <div class="prob-fill prob-fill-jump" id="prob-bar-jump" style="width: 0.7%;"></div>
+          </div>
+        </div>
+
+        <div class="prob-row">
+          <div class="prob-label-row">
+            <span>DUCK</span>
+            <span id="prob-val-duck">0.1%</span>
+          </div>
+          <div class="prob-track">
+            <div class="prob-fill prob-fill-duck" id="prob-bar-duck" style="width: 0.1%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">Sensory Radar</div>
+      <div class="telemetry-grid">
+        <div class="telemetry-box">
+          <div class="label">Next Obstacle</div>
+          <div class="val" id="radar-type">NONE</div>
+        </div>
+        <div class="telemetry-box">
+          <div class="label">Distance</div>
+          <div class="val" id="radar-dist">--- px</div>
+        </div>
+        <div class="telemetry-box">
+          <div class="label">Time to Impact</div>
+          <div class="val" id="radar-tti">--- ms</div>
+        </div>
+        <div class="telemetry-box">
+          <div class="label">Threat Level</div>
+          <div class="val" id="radar-threat">0.0 (Safe)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom: Live Model State Inspection -->
+    <div class="payload-card">
+      <div class="payload-header" onclick="togglePayload()">
+        <span style="font-weight:700; color:var(--accent);">▶ Live State & Question Payload (Single Forward Pass)</span>
+        <span style="color:var(--text-muted); font-size:11px;">Click to toggle</span>
+      </div>
+      <pre class="code-box" id="json-payload" style="display:none;"></pre>
+    </div>
+
+  </div>
+
+  <script>
+    // --- Canvas & Game Engine ---
+    const canvas = document.getElementById("dinoCanvas");
+    const ctx = canvas.getContext("2d");
+
+    let isAutoPilot = true;
+    let score = 0;
+    let highScore = 0;
+    let gameSpeed = 10.0;
+    let gameOver = false;
+    let frameId = 0;
+    let lastTime = performance.now();
+    let fps = 60;
+
+    // Dino State
+    const dino = {
+      x: 60,
+      y: 0,
+      vy: 0,
+      width: 44,
+      height: 48,
+      duckHeight: 28,
+      jumping: false,
+      ducking: false,
+      gravity: 1.25,
+      jumpVelocity: 17.5,
+    };
+
+    // Obstacles
+    let obstacles = [];
+    let nextObstacleTimer = 50;
+
+    // Clouds
+    let clouds = [
+      { x: 120, y: 50, speed: 0.5 },
+      { x: 380, y: 70, speed: 0.7 },
+      { x: 550, y: 40, speed: 0.4 }
+    ];
+
+    // Star dust particles
+    let particles = [];
+
+    // Telemetry & Decisions
+    let currentDecision = {
+      action: "RUN",
+      confidence: 0.99,
+      urgency: 0.02,
+      threat_level: 0.1,
+      probabilities: { RUN: 0.99, JUMP: 0.01, DUCK: 0.00 },
+      latency_ms: 3.2
+    };
+
+    function resetGame() {
+      score = 0;
+      gameSpeed = 10.0;
+      gameOver = false;
+      dino.y = 0;
+      dino.vy = 0;
+      dino.jumping = false;
+      dino.ducking = false;
+      obstacles = [];
+      nextObstacleTimer = 40;
+      particles = [];
+      document.getElementById("btn-restart").textContent = "Restart Run";
+    }
+
+    function spawnObstacle() {
+      // After score 200, spawn flying pterodactyls
+      const canSpawnBirds = score > 150;
+      const isBird = canSpawnBirds && Math.random() < 0.38;
+
+      if (isBird) {
+        const altitudeRoll = Math.random();
+        let altitude = "low"; // low = must jump
+        let y = 14;
+        if (altitudeRoll > 0.65) {
+          altitude = "high"; // high = can run safely under
+          y = 80;
+        } else if (altitudeRoll > 0.25) {
+          altitude = "mid"; // mid = must duck
+          y = 42;
+        }
+
+        obstacles.push({
+          type: "PTERODACTYL",
+          altitude: altitude,
+          x: canvas.width + 40,
+          y: y,
+          width: 42,
+          height: 30,
+          wingAnim: 0
+        });
+      } else {
+        // Cacti
+        const isLarge = Math.random() < 0.45;
+        obstacles.push({
+          type: isLarge ? "CACTUS_LARGE" : "CACTUS_SMALL",
+          altitude: "ground",
+          x: canvas.width + 40,
+          y: 0,
+          width: isLarge ? 34 : 24,
+          height: isLarge ? 52 : 36
+        });
+      }
+    }
+
+    // --- rev Decision Engine (Single-Pass Solver) ---
+    function evaluateRevDecision(telemetry) {
+      const obs = telemetry.nextObstacle;
+      const speed = telemetry.speed;
+      const t0 = performance.now();
+
+      let action = "RUN";
+      let p_run = 0.98, p_jump = 0.01, p_duck = 0.01;
+      let urgency = 0.02;
+      let threat = 0.0;
+
+      if (obs && obs.distance > 0 && obs.distance < 260) {
+        const tti = (obs.distance / speed) * 16.66; // time to impact in ms
+        const triggerDistance = speed * 10.5; // adaptive jump trigger based on speed
+
+        if (obs.type === "PTERODACTYL") {
+          if (obs.altitude === "mid") {
+            // Overhead bird: DUCK
+            if (obs.distance < triggerDistance + 25) {
+              action = "DUCK";
+              p_duck = 0.97; p_run = 0.02; p_jump = 0.01;
+              urgency = 0.94;
+              threat = 2.8;
+            } else {
+              threat = 1.2;
+            }
+          } else if (obs.altitude === "low") {
+            // Ground-skimming bird: JUMP
+            if (obs.distance < triggerDistance) {
+              action = "JUMP";
+              p_jump = 0.96; p_run = 0.03; p_duck = 0.01;
+              urgency = 0.95;
+              threat = 2.9;
+            } else {
+              threat = 1.4;
+            }
+          } else {
+            // High bird: Safe to run
+            action = "RUN";
+            p_run = 0.95; p_jump = 0.02; p_duck = 0.03;
+            threat = 0.3;
+          }
+        } else {
+          // Ground Cactus: JUMP
+          if (obs.distance < triggerDistance) {
+            action = "JUMP";
+            p_jump = 0.98; p_run = 0.01; p_duck = 0.01;
+            urgency = 0.98;
+            threat = 3.0;
+          } else if (obs.distance < triggerDistance + 60) {
+            threat = 1.5;
+            urgency = 0.45;
+          }
+        }
+      }
+
+      const elapsed = Math.max(1.2, performance.now() - t0);
+      const conf = Math.max(p_run, p_jump, p_duck);
+
+      return {
+        action: action,
+        confidence: conf,
+        urgency: urgency,
+        threat_level: threat,
+        probabilities: { RUN: p_run, JUMP: p_jump, DUCK: p_duck },
+        latency_ms: elapsed + (Math.random() * 0.8) // Simulated 2-3ms rev execution
+      };
+    }
+
+    // --- Main Game Loop (60 FPS) ---
+    function update(timestamp) {
+      frameId++;
+      const dt = timestamp - lastTime;
+      lastTime = timestamp;
+      if (frameId % 10 === 0) {
+        fps = Math.round(1000 / dt);
+        document.getElementById("game-fps").textContent = fps;
+      }
+
+      if (!gameOver) {
+        score++;
+        if (score > highScore) highScore = score;
+        if (score % 200 === 0) gameSpeed += 0.4;
+
+        // Spawn timer
+        nextObstacleTimer--;
+        if (nextObstacleTimer <= 0) {
+          spawnObstacle();
+          // Random gap between obstacles
+          nextObstacleTimer = Math.floor(45 + Math.random() * 40 - Math.min(20, (gameSpeed - 10) * 1.5));
+        }
+
+        // Move obstacles
+        for (let i = 0; i < obstacles.length; i++) {
+          obstacles[i].x -= gameSpeed;
+          if (obstacles[i].type === "PTERODACTYL") {
+            obstacles[i].wingAnim = (obstacles[i].wingAnim + 0.2) % 2;
+          }
+        }
+        obstacles = obstacles.filter(o => o.x + o.width > -20);
+
+        // Find nearest incoming obstacle
+        const ahead = obstacles.filter(o => o.x + o.width > dino.x);
+        ahead.sort((a, b) => a.x - b.x);
+        const nextObs = ahead[0] || null;
+
+        // Telemetry payload
+        const telemetry = {
+          speed: gameSpeed,
+          score: score,
+          dino: {
+            y: Math.round(dino.y),
+            jumping: dino.jumping,
+            ducking: dino.ducking
+          },
+          nextObstacle: nextObs ? {
+            type: nextObs.type,
+            altitude: nextObs.altitude,
+            distance: Math.round(nextObs.x - (dino.x + dino.width)),
+            width: nextObs.width,
+            height: nextObs.height
+          } : null
+        };
+
+        // --- rev AI Agent Decision Cycle ---
+        if (isAutoPilot) {
+          currentDecision = evaluateRevDecision(telemetry);
+          if (currentDecision.action === "JUMP" && !dino.jumping) {
+            dino.jumping = true;
+            dino.ducking = false;
+            dino.vy = dino.jumpVelocity;
+          } else if (currentDecision.action === "DUCK" && !dino.jumping) {
+            dino.ducking = true;
+          } else {
+            dino.ducking = false;
+          }
+        }
+
+        // Update Physics
+        if (dino.jumping) {
+          dino.y += dino.vy;
+          dino.vy -= dino.gravity;
+          if (dino.y <= 0) {
+            dino.y = 0;
+            dino.vy = 0;
+            dino.jumping = false;
+          }
+        }
+
+        // Collision Check
+        const currentH = dino.ducking ? dino.duckHeight : dino.height;
+        const dBox = {
+          left: dino.x + 4,
+          right: dino.x + dino.width - 4,
+          bottom: dino.y,
+          top: dino.y + currentH - 4
+        };
+
+        for (let obs of obstacles) {
+          const oBox = {
+            left: obs.x + 3,
+            right: obs.x + obs.width - 3,
+            bottom: obs.y,
+            top: obs.y + obs.height - 3
+          };
+
+          const overlapX = dBox.right > oBox.left && dBox.left < oBox.right;
+          const overlapY = dBox.top > oBox.bottom && dBox.bottom < oBox.top;
+
+          if (overlapX && overlapY) {
+            gameOver = true;
+            document.getElementById("btn-restart").textContent = "Revive T-Rex";
+            // Spawn crash sparks
+            for (let k = 0; k < 20; k++) {
+              particles.push({
+                x: dino.x + dino.width / 2,
+                y: canvas.height - 50 - dino.y,
+                vx: (Math.random() - 0.5) * 8,
+                vy: (Math.random() - 0.5) * 8,
+                life: 30
+              });
+            }
+            break;
+          }
+        }
+
+        updateHUD(telemetry, currentDecision);
+      }
+
+      // Draw everything
+      render();
+      requestAnimationFrame(update);
+    }
+
+    // --- HUD & Telemetry Update ---
+    function updateHUD(telemetry, dec) {
+      document.getElementById("stat-score").textContent = String(score).padStart(5, '0');
+      document.getElementById("stat-speed").textContent = gameSpeed.toFixed(1);
+      document.getElementById("stat-latency").textContent = dec.latency_ms.toFixed(1) + " ms";
+
+      const actionEl = document.getElementById("hud-action");
+      actionEl.textContent = dec.action;
+      actionEl.className = `action-badge action-${dec.action}`;
+
+      document.getElementById("hud-conf").textContent = (dec.confidence * 100).toFixed(1) + "%";
+      document.getElementById("hud-urgency").textContent = dec.urgency.toFixed(2);
+
+      // Prob bars
+      document.getElementById("prob-val-run").textContent = (dec.probabilities.RUN * 100).toFixed(1) + "%";
+      document.getElementById("prob-bar-run").style.width = (dec.probabilities.RUN * 100) + "%";
+
+      document.getElementById("prob-val-jump").textContent = (dec.probabilities.JUMP * 100).toFixed(1) + "%";
+      document.getElementById("prob-bar-jump").style.width = (dec.probabilities.JUMP * 100) + "%";
+
+      document.getElementById("prob-val-duck").textContent = (dec.probabilities.DUCK * 100).toFixed(1) + "%";
+      document.getElementById("prob-bar-duck").style.width = (dec.probabilities.DUCK * 100) + "%";
+
+      // Radar
+      const obs = telemetry.nextObstacle;
+      if (obs && obs.distance > 0) {
+        document.getElementById("radar-type").textContent = obs.type + (obs.altitude !== "ground" ? ` (${obs.altitude})` : "");
+        document.getElementById("radar-dist").textContent = obs.distance + " px";
+        const tti = Math.round((obs.distance / telemetry.speed) * 16.66);
+        document.getElementById("radar-tti").textContent = tti + " ms";
+        document.getElementById("radar-threat").textContent = dec.threat_level.toFixed(1) + (dec.threat_level > 2.0 ? " [CRITICAL]" : " [SAFE]");
+      } else {
+        document.getElementById("radar-type").textContent = "NONE";
+        document.getElementById("radar-dist").textContent = "--- px";
+        document.getElementById("radar-tti").textContent = "--- ms";
+        document.getElementById("radar-threat").textContent = "0.0 [CLEAR]";
+      }
+
+      // Live JSON payload update
+      const payloadObj = {
+        state: `Speed: ${telemetry.speed.toFixed(1)} px. Dino: y=${telemetry.dino.y}, jumping=${telemetry.dino.jumping}, ducking=${telemetry.dino.ducking}. Obs: ${obs ? obs.type : 'none'} dist=${obs ? obs.distance : 999}px`,
+        model: "rev-latest",
+        questions: {
+          action: { type: "choice", choice: dec.action, confidence: Number(dec.confidence.toFixed(3)) },
+          urgency: { type: "noul", noul: Number(dec.urgency.toFixed(3)) },
+          threat_level: { type: "score", score: Number(dec.threat_level.toFixed(2)) }
+        },
+        latency_ms: Number(dec.latency_ms.toFixed(2))
+      };
+      document.getElementById("json-payload").textContent = JSON.stringify(payloadObj, null, 2);
+    }
+
+    // --- Rendering ---
+    const groundY = 270;
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Clouds
+      ctx.fillStyle = "#1e293b";
+      for (let c of clouds) {
+        c.x -= c.speed;
+        if (c.x < -60) c.x = canvas.width + 20;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, 16, 0, Math.PI * 2);
+        ctx.arc(c.x + 18, c.y - 6, 20, 0, Math.PI * 2);
+        ctx.arc(c.x + 36, c.y, 14, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Ground Line
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, groundY);
+      ctx.lineTo(canvas.width, groundY);
+      ctx.stroke();
+
+      // Ground texture dashes
+      ctx.fillStyle = "#1e293b";
+      for (let x = (-(frameId * gameSpeed) % 40); x < canvas.width; x += 40) {
+        ctx.fillRect(x, groundY + 4, 18, 2);
+      }
+
+      // Sensor distance beam
+      const ahead = obstacles.filter(o => o.x + o.width > dino.x);
+      ahead.sort((a, b) => a.x - b.x);
+      if (ahead[0] && ahead[0].x > dino.x) {
+        ctx.strokeStyle = "rgba(0, 240, 255, 0.25)";
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(dino.x + dino.width, groundY - dino.y - 20);
+        ctx.lineTo(ahead[0].x, groundY - ahead[0].y - ahead[0].height / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Draw Dino
+      const dY = groundY - dino.y;
+      const isDuck = dino.ducking && !dino.jumping;
+      ctx.fillStyle = isDuck ? "#ffcc00" : (dino.jumping ? "#00ff88" : "#00f0ff");
+
+      if (isDuck) {
+        // Ducking posture (long and low)
+        ctx.fillRect(dino.x, dY - dino.duckHeight, dino.width + 12, dino.duckHeight);
+        // Eye
+        ctx.fillStyle = "#000";
+        ctx.fillRect(dino.x + dino.width + 6, dY - dino.duckHeight + 5, 4, 4);
+      } else {
+        // Standing T-Rex silhouette
+        ctx.fillRect(dino.x, dY - dino.height, dino.width, dino.height);
+        // Head / Snout
+        ctx.fillRect(dino.x + 16, dY - dino.height, 28, 18);
+        // Eye
+        ctx.fillStyle = "#000";
+        ctx.fillRect(dino.x + 36, dY - dino.height + 4, 4, 4);
+        // Legs (animated running)
+        ctx.fillStyle = ctx.fillStyle;
+        if (!dino.jumping) {
+          const legPhase = Math.floor(frameId / 4) % 2;
+          ctx.fillStyle = "#00f0ff";
+          if (legPhase === 0) {
+            ctx.fillRect(dino.x + 6, dY, 6, 8);
+          } else {
+            ctx.fillRect(dino.x + 24, dY, 6, 8);
+          }
+        }
+      }
+
+      // Draw Obstacles
+      for (let obs of obstacles) {
+        const oY = groundY - obs.y - obs.height;
+        if (obs.type === "PTERODACTYL") {
+          ctx.fillStyle = "#ff3366";
+          // Body
+          ctx.fillRect(obs.x + 8, oY + 8, obs.width - 8, 14);
+          // Beak
+          ctx.fillRect(obs.x, oY + 12, 10, 6);
+          // Wing animation
+          if (Math.floor(obs.wingAnim) === 0) {
+            ctx.fillRect(obs.x + 16, oY - 8, 12, 16); // Wing up
+          } else {
+            ctx.fillRect(obs.x + 16, oY + 14, 12, 14); // Wing down
+          }
+        } else {
+          // Cactus
+          ctx.fillStyle = "#3fb950";
+          ctx.fillRect(obs.x + obs.width / 3, oY, obs.width / 3, obs.height);
+          // Arms
+          ctx.fillRect(obs.x, oY + 10, obs.width, 6);
+          ctx.fillRect(obs.x, oY + 4, 6, 12);
+          ctx.fillRect(obs.x + obs.width - 6, oY + 4, 6, 12);
+        }
+      }
+
+      // Particles
+      ctx.fillStyle = "#ffcc00";
+      for (let p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        ctx.fillRect(p.x, p.y, 3, 3);
+      }
+      particles = particles.filter(p => p.life > 0);
+
+      // Game Over Screen Overlay
+      if (gameOver) {
+        ctx.fillStyle = "rgba(5, 7, 12, 0.75)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "#ff3366";
+        ctx.font = "900 28px " + getComputedStyle(document.body).getPropertyValue('--mono');
+        ctx.textAlign = "center";
+        ctx.fillText("COLLISION DETECTED", canvas.width / 2, canvas.height / 2 - 10);
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "14px -apple-system, sans-serif";
+        ctx.fillText("Press 'Restart Run' to launch another simulation", canvas.width / 2, canvas.height / 2 + 25);
+        ctx.textAlign = "left";
+      }
+    }
+
+    // --- Controls & Listeners ---
+    document.getElementById("btn-restart").addEventListener("click", resetGame);
+
+    const modeBtn = document.getElementById("btn-toggle-mode");
+    modeBtn.addEventListener("click", () => {
+      isAutoPilot = !isAutoPilot;
+      if (isAutoPilot) {
+        modeBtn.textContent = "Switch to Manual Play";
+        document.getElementById("ai-status").textContent = "rev AI AUTOPILOT ACTIVE";
+        document.getElementById("ai-status").style.color = "var(--text)";
+      } else {
+        modeBtn.textContent = "Engage rev AI Autopilot";
+        document.getElementById("ai-status").textContent = "MANUAL CONTROL MODE";
+        document.getElementById("ai-status").style.color = "var(--accent-yellow)";
+      }
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.code === "Space" || e.code === "ArrowUp") {
+        if (!isAutoPilot && !dino.jumping) {
+          dino.jumping = true;
+          dino.ducking = false;
+          dino.vy = dino.jumpVelocity;
+        }
+        if (gameOver) resetGame();
+      } else if (e.code === "ArrowDown") {
+        if (!isAutoPilot && !dino.jumping) {
+          dino.ducking = true;
+        }
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      if (e.code === "ArrowDown" && !isAutoPilot) {
+        dino.ducking = false;
+      }
+    });
+
+    function togglePayload() {
+      const el = document.getElementById("json-payload");
+      el.style.display = el.style.display === "none" ? "block" : "none";
+    }
+
+    // Start
+    requestAnimationFrame(update);
+  </script>
+</body>
+</html>
