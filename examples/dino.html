@@ -1453,20 +1453,41 @@ Horizon.prototype = {
     var autoRestartPending = false;
     var lastEvalTime = performance.now();
 
+    // Trigger start cleanly once
+    function triggerStart() {
+      if (runner) {
+        if (runner.loadSounds) {
+          try { runner.loadSounds(); } catch(e) {}
+        }
+        if (!runner.started) {
+          runner.playIntro();
+        }
+        if (!runner.activated) {
+          runner.activated = true;
+        }
+        if (runner.crashed) {
+          runner.restart();
+        }
+      }
+    }
+
+    // Auto-start immediately after canvas & DOM are ready
+    setTimeout(triggerStart, 100);
+    setTimeout(triggerStart, 500);
+
+    // Also trigger start on clicking the game viewport or window
+    document.querySelector('.game-viewport-card').addEventListener('click', triggerStart);
+    window.addEventListener('keydown', function(e) {
+      if (e.keyCode === 32 || e.keyCode === 38) {
+        triggerStart();
+      }
+    });
+
     // The rev Decision Loop
     function revAutopilotLoop() {
       if (!runner) {
         requestAnimationFrame(revAutopilotLoop);
         return;
-      }
-
-      // Auto-start game on first tick
-      if (!runner.activated || !runner.started) {
-        if (autopilotActive) {
-          runner.playIntro();
-          runner.startGame();
-          runner.tRex.startJump();
-        }
       }
 
       // Auto-restart when crashed
