@@ -1,9 +1,10 @@
 # rev
 
 <p>
+  <a href="https://pypi.org/project/rev-decision/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/rev-decision.svg?style=for-the-badge&labelColor=000000" height="28"></a>
+  <a href="https://huggingface.co/jaswanthsanjay88/rev-decision-model"><img alt="HF Model" src="https://img.shields.io/badge/%F0%9F%A4%97%20DECISION%20MODEL-rev--decision--model-blue.svg?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="https://huggingface.co/jaswanthsanjay88/rev-0.5b"><img alt="Weights: rev-0.5b" src="https://img.shields.io/badge/%F0%9F%A4%97%20WEIGHTS-jaswanthsanjay88%2Frev--0.5b-yellow.svg?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="PLAN.md"><img alt="Research Log" src="https://img.shields.io/badge/RESEARCH%20LOG-PLAN.md-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
-  <a href="colab/rev_colab.ipynb"><img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg" height="28"></a>
   <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-0a0a0a.svg?style=for-the-badge&labelColor=000000" height="28"></a>
 </p>
 
