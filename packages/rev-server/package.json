@@ -1,6 +1,6 @@
 {
   "name": "rev-server",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Fast System 1 Decision Engine Server CLI for rev",
   "main": "bin/cli.js",
   "bin": {

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rev-decision"
-version = "0.2.3"
+version = "0.2.4"
 description = "Fast, non-autoregressive System 1 decision engine with calibrated probabilities and sub-microsecond routing"
 readme = "README.md"
 requires-python = ">=3.10"
