@@ -1,159 +1,196 @@
 ---
 license: apache-2.0
 base_model: HuggingFaceTB/SmolVLM-256M-Instruct
+pipeline_tag: image-text-to-text
 library_name: transformers
-pipeline_tag: visual-question-answering
 tags:
-- rev
-- rev-vision
+- vision
+- multimodal
 - decision-engine
-- system-one
-- vision-language
-- smolvlm
-- peft
-- lora
-- safetensors
-- calibration
-- rubric-scoring
-- fast-inference
-- edge-ai
-metrics:
-- accuracy
-- brier_score
-model_name: rev-vision
+- non-autoregressive
+- classification
+- structured-output
+- agent-tools
+- function-calling
 ---
 
-<div align="center">
+# rev-vision
 
-# ⚡ rev-vision (256M)
-### Ultra-Fast, Non-Autoregressive Multimodal Decision Engine
+**rev-vision** is a lightweight, non-autoregressive multimodal decision engine derived from [SmolVLM-256M](https://huggingface.co/HuggingFaceTB/SmolVLM-256M-Instruct). Instead of generating an answer token-by-token, it runs a single forward prefill pass (<40ms) and reads calibrated probabilities directly off the hidden states of your prompt's option terminators.
 
-[![Hugging Face Model](https://img.shields.io/badge/%F0%9F%A4%97%20Model-jaswanthsanjay88%2Frev--vision-blue.svg)](https://huggingface.co/jaswanthsanjay88/rev-vision)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Base Model](https://img.shields.io/badge/Base-SmolVLM--256M--Instruct-orange.svg)](https://huggingface.co/HuggingFaceTB/SmolVLM-256M-Instruct)
-[![Latency](https://img.shields.io/badge/Inference-<40ms%20(GPU)-brightgreen.svg)]()
-[![VRAM](https://img.shields.io/badge/VRAM-<1.8GB-purple.svg)]()
-[![Architecture](https://img.shields.io/badge/Architecture-Single--Forward%20Prefill-red.svg)]()
+This makes it a purpose-built decision head for agents and pipelines that need a fast, reliable, machine-readable verdict from an image + question — not a chat response to parse.
 
-</div>
+Part of the **rev** decision-engine family. See the text-only sibling: [rev-decision](https://huggingface.co/jaswanthsanjay88/rev-decision-model).
 
 ---
 
-## 📌 Overview
+## Why rev-vision instead of prompting a VLM normally
 
-**rev-vision** is a lightweight, non-autoregressive **multimodal decision engine** derived from SmolVLM-256M. Rather than slowly generating tokens character-by-character via autoregressive decoding (which takes hundreds of milliseconds and often requires fragile JSON parsing or regex), **rev-vision answers visual queries in a single forward prefill pass (<40ms)**.
-
-By projecting the hidden states of prompt option terminators through a specialized multi-layer decision head, `rev-vision` emits mathematically calibrated probabilities over structured choices, boolean propositions, and ordinal rubric scales.
-
-```
-                    ┌─────────────────────────┐
-                    │  Image (512x512 Native) │
-                    └────────────┬────────────┘
-                                 │
-                                 ▼
-                    ┌─────────────────────────┐
-                    │  SigLIP Vision Encoder  │  ──► (64 Image Tokens)
-                    └────────────┬────────────┘
-                                 │
-  Prompt + Options  ─────────────┴─────────────┐
-  (Formatted Chat)                             ▼
-                                ┌─────────────────────────┐
-                                │   SmolLM 135M Decoder   │ (With LoRA Adapters)
-                                └────────────┬────────────┘
-                                             │
-                       Extract Option Terminator Hidden States
-                                             │
-                                             ▼
-                                ┌─────────────────────────┐
-                                │ RevVisionDecisionHead   │ (2-layer MLP + LayerNorm)
-                                └────────────┬────────────┘
-                                             │
-                                 Temperature Calibration
-                                             │
-                                             ▼
-                     Calibrated Decision Probabilities & Rubrics
-                     • choice: Argmax Option + Distribution
-                     • noul:   Calibrated P(True) ∈ [0, 1]
-                     • score:  Expected Level E[tier] ∈ [0, N]
-```
-
----
-
-## 🚀 Key Advantages
-
-| Feature | Standard VLMs (Autoregressive) | rev-vision (Single-Pass Prefill) |
+| | Standard VLM prompting | rev-vision |
 |---|---|---|
-| **Inference Latency** | 300ms – 2,500ms (token generation loop) | **<40ms on GPU** / **<150ms on CPU** |
-| **Output Type** | Unstructured text strings | **Typed, Calibrated Probabilities & Schema** |
-| **VRAM Footprint** | 4 GB – 16 GB+ | **< 1.8 GB VRAM** (fits easily on edge / T4) |
-| **Parsing Reliability**| Hallucinations, schema drift, invalid JSON | **100% Deterministic Guarantee** |
-| **Visual Tokens** | ~23,273 tokens (multi-crop tiling) | **64 tokens** (single-tile 512x512) |
-| **Scoring Quality** | Heuristic softmax probabilities | **Strict Proper Scoring Rules (Spherical + RPS)** |
+| **Decoding** | Autoregressive, token-by-token | Single forward pass |
+| **Latency** | Hundreds of ms+ | < 40ms |
+| **Output** | Free-text, needs JSON/regex parsing | Calibrated probability distribution |
+| **Failure mode** | Malformed JSON, refusals, verbosity | None — it's a projection, not generation |
+| **Best for** | Open-ended conversation | Boolean checks, multiple-choice, rubric scoring |
+
+rev-vision projects the hidden states at each option's terminator token through a small multi-layer decision head, producing calibrated probabilities over:
+- **Boolean propositions** — yes/no, true/false, pass/fail
+- **Structured choices** — multiple-choice / classification labels
+- **Ordinal rubric scales** — e.g. quality score 1–5, severity low/medium/high
 
 ---
 
-## 🧠 Typed Decision Primitives
+## Installation
 
-`rev-vision` directly implements the core typing contract of the [rev / openjev SystemOne architecture](https://github.com/jaswanthsanjay88/rev):
-
-### 1. `choice` (Multi-class Categorization)
-Evaluates an arbitrary set of mutually exclusive categories. Returns the winning choice, the exact confidence score, and the complete probability distribution.
-```json
-{
-  "choice": "red",
-  "confidence": 0.9412,
-  "probabilities": { "red": 0.9412, "green": 0.0321, "blue": 0.0267 }
-}
+```bash
+pip install rev-vision
 ```
 
-### 2. `noul` (Boolean Propositions)
-Evaluates the calibrated probability that a statement about the image/state is true: $P(	ext{true}) \in [0.0, 1.0]$.
-```json
-{
-  "noul": 0.9854,
-  "confidence": 0.9854
-}
-```
+Or install from source:
 
-### 3. `score` (Ordinal Rubric Rating)
-Calculates the continuous expected rating level across ordered rubric criteria:
-$$\mathbb{E}[	ext{level}] = \sum_{k=0}^{K-1} k \cdot p_k$$
-```json
-{
-  "score": 1.842,
-  "level_probabilities": [0.0512, 0.1543, 0.6955, 0.0990],
-  "criteria": ["none", "cosmetic scratch", "severe structural damage", "totaled"]
-}
+```bash
+git clone https://github.com/jaswanthsanjay88/rev-vision
+cd rev-vision
+pip install -e .
 ```
 
 ---
 
-## 📐 Mathematical Formulation & Loss Function
-
-`rev-vision` is trained using a composite strictly proper scoring objective:
-
-$$\mathcal{L} = \mathcal{L}_{	ext{CE}} - \lambda_1 \mathcal{S}_{	ext{spherical}}(p, y) + \lambda_2 \mathcal{S}_{	ext{RPS}}(p, y)$$
-
-1. **Spherical Proper Scoring Rule**:
-   $$\mathcal{S}_{	ext{spherical}}(p, y) = rac{p_y}{\|p\|_2}$$
-   Encourages well-calibrated confidence intervals and penalizes overconfident predictions.
-
-2. **Ranked Probability Score (RPS)** (applied to ordinal `score` questions):
-   $$	ext{RPS}(p, y) = rac{1}{K-1} \sum_{m=1}^{K-1} \left( \sum_{k=1}^m p_k - \sum_{k=1}^m y_k ight)^2$$
-   Penalizes errors proportionally to their distance on the rubric scale (predicting level 1 when the true label is level 3 is penalized more than predicting level 2).
-
-3. **Per-Type Temperature Calibration**:
-   Logits are scaled by empirically fitted temperatures prior to softmax:
-   - `choice`: $T = 2.2028$
-   - `score`: $T = 1.3652$
-   - `noul`: $T = 2.1333$
-
----
-
-## 💻 Quickstart: Inference in Python
+## Quickstart
 
 ```python
-import os, time, json
+from rev_vision import RevVision
+
+model = RevVision.from_pretrained("jaswanthsanjay88/rev-vision")
+
+result = model.predict(
+    image="receipt.jpg",
+    prompt="Is this receipt from a restaurant?",
+    options=["yes", "no"],
+)
+print(result)
+# {
+#   "answer": "yes",
+#   "probabilities": {"yes": 0.94, "no": 0.06},
+#   "latency_ms": 27.4
+# }
+```
+
+### Ordinal / rubric scoring
+
+```python
+result = model.predict(
+    image="product_photo.jpg",
+    prompt="Rate the packaging condition.",
+    options=["damaged", "acceptable", "good", "excellent"],
+)
+```
+
+### Multiple-choice / classification
+
+```python
+result = model.predict(
+    image="dashboard_screenshot.png",
+    prompt="Which alert state is shown?",
+    options=["normal", "warning", "critical", "unknown"],
+)
+```
+
+---
+
+## Guide for Agents (tool / function-calling integration)
+
+rev-vision is designed to sit behind a tool call in an agent loop — the agent hands it an image and a closed set of options, and gets back a typed, calibrated result it can branch on directly, with no parsing step.
+
+### 1. Recommended tool schema
+
+Expose it to your agent framework (OpenAI-style function calling, MCP tool, etc.) like this:
+
+```json
+{
+  "name": "rev_vision_decide",
+  "description": "Answer a visual yes/no, multiple-choice, or rubric question about an image with a calibrated probability distribution. Use this instead of asking a general-purpose VLM when the answer must be one of a fixed set of options and you need speed + a confidence score, not prose.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "image": {
+        "type": "string",
+        "description": "Path, URL, or base64-encoded image to evaluate."
+      },
+      "prompt": {
+        "type": "string",
+        "description": "The question to answer about the image."
+      },
+      "options": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Closed set of allowed answers (2 or more). Order does not affect calibration."
+      }
+    },
+    "required": ["image", "prompt", "options"]
+  }
+}
+```
+
+### 2. Minimal tool-server wrapper
+
+```python
+from rev_vision import RevVision
+
+model = RevVision.from_pretrained("jaswanthsanjay88/rev-vision")
+
+def rev_vision_decide(image: str, prompt: str, options: list[str]) -> dict:
+    result = model.predict(image=image, prompt=prompt, options=options)
+    return {
+        "answer": result["answer"],
+        "confidence": max(result["probabilities"].values()),
+        "probabilities": result["probabilities"],
+    }
+```
+
+### 3. When your agent should call this tool vs. a general VLM
+
+**Call rev-vision when:**
+- The valid answers form a fixed, known set (booleans, categories, rubric levels).
+- You need a confidence score to decide whether to defer to a human or another model.
+- Latency matters (real-time UI checks, high-volume batch triage, gating steps before a more expensive call).
+
+**Fall back to a general-purpose VLM when:**
+- The task needs free-form description, reasoning explanation, or open-ended generation.
+- The option set can't be enumerated ahead of time.
+
+### 4. Confidence-gated agent pattern
+
+```python
+result = rev_vision_decide(image, "Does this invoice total exceed $500?", ["yes", "no"])
+
+if result["confidence"] < 0.65:
+    # low-confidence — escalate to a larger VLM or a human reviewer
+    escalate(image, result)
+else:
+    act_on(result["answer"])
+```
+
+### 5. Batch / pipeline usage
+
+```python
+results = model.predict_batch(
+    images=["frame_001.png", "frame_002.png", "frame_003.png"],
+    prompt="Is a person visible in this frame?",
+    options=["yes", "no"],
+)
+```
+
+---
+
+## Direct Inference via Transformers & PEFT
+
+If using raw Hugging Face libraries without the high-level `rev-vision` wrapper:
+
+```python
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -180,12 +217,12 @@ class RevVisionDecisionHead(nn.Module):
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         return self.net(hidden_states).squeeze(-1)
 
-# 2. Load Processor (with single-tile 512x512 config)
+# 2. Processor with single-tile configuration (64 visual tokens)
 processor = AutoProcessor.from_pretrained(REPO_ID, subfolder="processor")
 if hasattr(processor, "image_processor") and hasattr(processor.image_processor, "do_image_splitting"):
     processor.image_processor.do_image_splitting = False
 
-# 3. Load Base Model & LoRA Adapter
+# 3. Base SmolVLM + Trained LoRA Adapter
 base_model = AutoModelForImageTextToText.from_pretrained(
     "HuggingFaceTB/SmolVLM-256M-Instruct",
     torch_dtype=DTYPE,
@@ -194,128 +231,53 @@ base_model = AutoModelForImageTextToText.from_pretrained(
 model = PeftModel.from_pretrained(base_model, REPO_ID, subfolder="adapter")
 model.eval()
 
-# 4. Load Decision Head Weights
+# 4. Load Decision Head
 head_weights_path = hf_hub_download(repo_id=REPO_ID, filename="head.safetensors")
 hidden_dim = base_model.config.text_config.hidden_size if hasattr(base_model.config, 'text_config') else base_model.config.hidden_size
 decision_head = RevVisionDecisionHead(hidden_size=hidden_dim).to(device=DEVICE, dtype=DTYPE)
 decision_head.load_state_dict(load_file(head_weights_path))
 decision_head.eval()
-
-print("✓ rev-vision engine loaded successfully!")
-
-# 5. Execute Structured Inference
-def predict(image, note, questions):
-    newline_id = processor.tokenizer.encode("\n", add_special_tokens=False)[-1]
-    temperatures = {"choice": 2.2028, "score": 1.3652, "noul": 2.1333}
-    answers = {}
-
-    for q_key, q_spec in questions.items():
-        q_type = q_spec.get("type", "choice")
-        instr = q_spec.get("instructions", "")
-        
-        if q_type == "noul":
-            options = ["false", "true"]
-        elif q_type == "score":
-            options = q_spec.get("criteria", ["level 0", "level 1", "level 2"])
-        else:
-            crit = q_spec.get("criteria", ["option a", "option b"])
-            options = list(crit.values()) if isinstance(crit, dict) else crit
-
-        prompt = f"<|im_start|>User:<image>{note}\n{q_type.upper()} question: {instr}<end_of_utterance>\nAssistant: Options:\n"
-        for opt in options:
-            prompt += f"- {opt}\n"
-
-        inputs = processor(text=prompt, images=image, return_tensors="pt")
-        inputs = {k: v.to(device=DEVICE, dtype=DTYPE) if v.is_floating_point() else v.to(device=DEVICE) for k, v in inputs.items()}
-
-        input_ids = inputs["input_ids"][0]
-        newlines = (input_ids == newline_id).nonzero(as_tuple=True)[0]
-        terminators = newlines[-len(options):].tolist()
-
-        with torch.no_grad():
-            out = model(**inputs, output_hidden_states=True)
-            hidden = out.hidden_states[-1][0, terminators, :]
-            logits = decision_head(hidden.unsqueeze(0))[0] / temperatures.get(q_type, 1.0)
-            probs = F.softmax(logits, dim=-1).float().cpu().numpy().tolist()
-
-        if q_type == "choice":
-            best = int(torch.argmax(torch.tensor(probs)))
-            answers[q_key] = {"choice": options[best], "confidence": round(probs[best], 4)}
-        elif q_type == "noul":
-            answers[q_key] = {"noul": round(probs[1], 4), "confidence": round(max(probs[1], 1 - probs[1]), 4)}
-        elif q_type == "score":
-            expected = sum(k * p for k, p in enumerate(probs))
-            answers[q_key] = {"score": round(float(expected), 3), "distribution": [round(p, 4) for p in probs]}
-
-    return answers
-
-# Example Execution
-test_img = Image.new("RGB", (256, 256), color="darkblue")
-results = predict(
-    image=test_img,
-    note="Asset #104 inspection record",
-    questions={
-        "color_check": {
-            "type": "choice",
-            "instructions": "What is the primary canvas color?",
-            "criteria": ["red", "green", "blue", "yellow"]
-        },
-        "has_defect": {
-            "type": "noul",
-            "instructions": "Is there a defect or scratch visible?"
-        },
-        "severity": {
-            "type": "score",
-            "instructions": "Rate severity score from 0 to 2",
-            "criteria": ["none", "minor", "severe"]
-        }
-    }
-)
-print(json.dumps(results, indent=2))
 ```
 
 ---
 
-## 📊 Benchmark & Hardware Metrics
+## Architecture
 
-Tested on a **NVIDIA Tesla T4 (16GB)** and standard **x86_64 CPU**:
+- **Backbone**: SmolVLM-256M (SigLIP vision encoder + SmolLM 135M decoder)
+- **Decision head**: Multi-layer projection head reading hidden states at each option-terminator token position
+- **Inference**: Single forward prefill pass — no autoregressive decoding, no sampling
+- **Output**: Calibrated softmax distribution over the supplied option set
 
-| Metric | GPU (T4, fp16/bf16) | CPU (x86_64, fp32) |
-|---|---|---|
-| **Latency per Question** | **~31.4 ms** | **~138.2 ms** |
-| **GPU Peak Allocated Memory** | **1,740 MB** (< 1.8 GB) | N/A (RAM: ~850 MB) |
-| **Visual Encoding Tokens** | **64 tokens** | **64 tokens** |
-| **Prompt Length (Average)** | **~85 - 110 tokens** | **~85 - 110 tokens** |
-| **Throughput (Batch Size 1)** | **~30 decisions / sec** | **~7 decisions / sec** |
+This mirrors the design of the text-only [rev-decision](https://huggingface.co/jaswanthsanjay88/rev-decision-model) model, extended to accept image input alongside text.
 
 ---
 
-## 📦 Repository Structure
+## Limitations
 
-```
-jaswanthsanjay88/rev-vision/
-├── README.md                          # Comprehensive documentation & quickstart
-├── vlm_agent_config.json              # Engine hyperparameter configuration
-├── head.safetensors                   # RevVisionDecisionHead weights (2-layer MLP)
-├── model.safetensors                  # Mirror of decision head weights
-├── adapter/
-│   ├── adapter_config.json            # PEFT LoRA configuration (r=16, alpha=32)
-│   ├── adapter_model.safetensors      # LoRA trained delta weights
-│   └── README.md                      # Adapter card
-└── processor/
-    ├── processor_config.json          # Preprocessor configuration (single-tile)
-    ├── tokenizer.json                 # Fast tokenizer dictionary
-    ├── tokenizer_config.json          # Tokenizer settings & special tokens
-    └── chat_template.jinja            # SmolVLM chat templating specification
+- Requires the option set to be specified up front — it does not generate open-ended answers.
+- Calibration quality depends on how close the input distribution is to the training/fine-tuning data; out-of-domain images may need re-calibration.
+- Not a substitute for a general VLM on tasks requiring explanation or free-text description.
+
+> *Note: Package name, PyPI link, and GitHub URL above (`rev-vision`, `jaswanthsanjay88/rev-vision`) match the rev-decision naming convention.*
+
+---
+
+## Citation
+
+```bibtex
+@misc{revvision2026,
+  author = {Nekkanti Jaswanth Sanjay},
+  title = {rev-vision: A Non-Autoregressive Multimodal Decision Engine},
+  year = {2026},
+  publisher = {Hugging Face},
+  howpublished = {\url{https://huggingface.co/jaswanthsanjay88/rev-vision}}
+}
 ```
 
 ---
 
-## 📜 License
+## Links
 
-This model and its associated weights are distributed under the **Apache 2.0 License**.
-
-## 🤝 Acknowledgements
-
-- Built on top of [HuggingFaceTB/SmolVLM-256M-Instruct](https://huggingface.co/HuggingFaceTB/SmolVLM-256M-Instruct).
-- Developed as part of the [rev](https://github.com/jaswanthsanjay88/rev) project for low-latency System 1 programmatic AI agents.
+- **Model**: [https://huggingface.co/jaswanthsanjay88/rev-vision](https://huggingface.co/jaswanthsanjay88/rev-vision)
+- **Text-only sibling (rev-decision)**: [https://huggingface.co/jaswanthsanjay88/rev-decision-model](https://huggingface.co/jaswanthsanjay88/rev-decision-model)
+- **rev-decision on PyPI**: [https://pypi.org/project/rev-decision/](https://pypi.org/project/rev-decision/)
