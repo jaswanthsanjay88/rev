@@ -1,0 +1,51 @@
+{
+  "name": "rev-decision",
+  "version": "0.2.2",
+  "description": "Fast, non-autoregressive System 1 decision engine client with calibrated probabilities",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "bin": {
+    "rev-server": "bin/cli.js",
+    "rev-decision": "bin/cli.js"
+  },
+  "scripts": {
+    "build": "node build-esm.js",
+    "compile": "npx -p typescript tsc -p tsconfig.json && node build-esm.js"
+  },
+  "keywords": [
+    "rev",
+    "decision-engine",
+    "system-one",
+    "ai",
+    "decision-model",
+    "guardrails",
+    "triage",
+    "classification",
+    "probabilities",
+    "typesafe"
+  ],
+  "author": "Jaswanth Sanjay <jaswanthsanjay88@gmail.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaswanthsanjay88/rev.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jaswanthsanjay88/rev/issues"
+  },
+  "homepage": "https://github.com/jaswanthsanjay88/rev#readme"
+}

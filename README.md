@@ -2,6 +2,7 @@
 
 <p align="center">
   <a href="https://pypi.org/project/rev-decision/"><img alt="PyPI version" src="https://img.shields.io/pypi/v/rev-decision.svg?style=for-the-badge&labelColor=000000" height="28"></a>
+  <a href="https://www.npmjs.com/package/rev-decision"><img alt="npm version" src="https://img.shields.io/npm/v/rev-decision.svg?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="https://pypi.org/project/rev-decision/"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg?style=for-the-badge&labelColor=000000" height="28"></a>
   <a href="https://github.com/jaswanthsanjay88/rev/actions/workflows/ci.yml"><img alt="CI Status" src="https://github.com/jaswanthsanjay88/rev/actions/workflows/ci.yml/badge.svg?style=for-the-badge" height="28"></a>
   <a href="https://pepy.tech/project/rev-decision"><img alt="Downloads" src="https://img.shields.io/badge/pepy-downloads-orange.svg?style=for-the-badge&labelColor=000000" height="28"></a>
@@ -25,14 +26,29 @@ Routing incoming requests, enforcing safety guardrails, classifying support tick
 
 ### Installation
 
+**Python (PyPI):**
 ```bash
 pip install rev-decision
 ```
 
-> [!NOTE]
-> When testing locally, name your script `app.py` or `main.py` (avoid naming your file `rev.py` so Python imports the library rather than your script).
+**TypeScript / JavaScript (npm, pnpm, yarn):**
+```bash
+# npm
+npm install rev-decision
 
-### Code Example
+# pnpm
+pnpm add rev-decision
+
+# yarn
+yarn add rev-decision
+```
+
+> [!NOTE]
+> When testing Python locally, name your script `app.py` or `main.py` (avoid naming your file `rev.py` so Python imports the library rather than your script).
+
+### Code Examples
+
+#### Python (PyPI)
 
 ```python
 import rev
@@ -52,6 +68,35 @@ print(res["answers"]["intent"]["confidence"])      # -> 0.984
 print(res["answers"]["frustration"]["score"])      # -> 2.85 (out of 3.0)
 print(res["answers"]["refund_requested"]["noul"])  # -> 0.992
 print(res["routing"]["model"])                     # -> "english" (ModernBERT-large)
+```
+
+#### TypeScript / JavaScript (npm / pnpm)
+
+```typescript
+import { rev } from "rev-decision";
+
+const res = await rev.predict({
+  state: "Customer received broken parcel and demands refund.",
+  questions: {
+    intent: {
+      type: "choice",
+      instructions: "Determine customer intent",
+      criteria: {
+        refund: "Customer demands money back",
+        support: "General inquiry",
+      },
+    },
+    urgent: {
+      type: "noul",
+      instructions: "Does this require immediate human escalation?",
+    },
+  },
+});
+
+console.log(res.answers.intent.choice);      // "refund"
+console.log(res.answers.intent.confidence);  // 0.984
+console.log(res.answers.urgent.noul);        // 0.96
+console.log(`Latency: ${res.latency_ms} ms`);
 ```
 
 **Output Payload:**
@@ -201,7 +246,8 @@ observability = rev.presets.observability_questions()
 
 ## 8. Citation & Links
 
-- **PyPI Package**: [https://pypi.org/project/rev-decision/](https://pypi.org/project/rev-decision/)
+- **PyPI Package (Python)**: [https://pypi.org/project/rev-decision/](https://pypi.org/project/rev-decision/)
+- **npm Package (TypeScript / JavaScript)**: [https://www.npmjs.com/package/rev-decision](https://www.npmjs.com/package/rev-decision)
 - **Hugging Face Decision Model**: [https://huggingface.co/jaswanthsanjay88/rev-decision-model](https://huggingface.co/jaswanthsanjay88/rev-decision-model)
 - **Hugging Face Weights**: [https://huggingface.co/jaswanthsanjay88/rev-0.5b](https://huggingface.co/jaswanthsanjay88/rev-0.5b)
 - **Interactive Playground**: [playground/](playground/) (Next.js 16 Web App with Decision Chess)

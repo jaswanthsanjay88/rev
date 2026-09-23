@@ -288,6 +288,16 @@ body {
 
 .fill-run { background: #ffffff; }
 .fill-jump { background: #a1a1aa; }
+.fill-duck { background: #71717a; }
+
+.action-DUCK {
+  color: #000000;
+  background: #a1a1aa;
+  padding: 2px 18px;
+  border-radius: 4px;
+  display: inline-block;
+  letter-spacing: 3px;
+}
 
 .radar-stats {
   display: grid;
@@ -469,6 +479,7 @@ Runner.imageSources = {
   LDPI: [
     {name: 'CACTUS_LARGE', id: '1x-obstacle-large'},
     {name: 'CACTUS_SMALL', id: '1x-obstacle-small'},
+    {name: 'PTERODACTYL', id: '1x-pterodactyl'},
     {name: 'CLOUD', id: '1x-cloud'},
     {name: 'HORIZON', id: '1x-horizon'},
     {name: 'RESTART', id: '1x-restart'},
@@ -478,6 +489,7 @@ Runner.imageSources = {
   HDPI: [
     {name: 'CACTUS_LARGE', id: '2x-obstacle-large'},
     {name: 'CACTUS_SMALL', id: '2x-obstacle-small'},
+    {name: 'PTERODACTYL', id: '2x-pterodactyl'},
     {name: 'CLOUD', id: '2x-cloud'},
     {name: 'HORIZON', id: '2x-horizon'},
     {name: 'RESTART', id: '2x-restart'},
@@ -610,14 +622,23 @@ Runner.prototype = {
     document.addEventListener('keyup', this.onKeyUp.bind(this));
   },
   onKeyDown: function(e) {
-    if (!this.crashed && (Runner.keycodes.JUMP[String(e.keyCode)] || e.type == 'touchstart')) {
-      if (!this.activated) {
-        this.loadSounds();
-        this.activated = true;
-      }
-      if (!this.tRex.jumping) {
-        this.playSound(this.soundFx.BUTTON_PRESS);
-        this.tRex.startJump();
+    if (!this.crashed) {
+      var keyCode = String(e.keyCode);
+      if (Runner.keycodes.JUMP[keyCode] || e.type == 'touchstart') {
+        if (!this.activated) {
+          this.loadSounds();
+          this.activated = true;
+        }
+        if (!this.tRex.jumping) {
+          this.playSound(this.soundFx.BUTTON_PRESS);
+          this.tRex.startJump();
+        }
+      } else if (Runner.keycodes.DUCK[keyCode]) {
+        if (this.tRex.jumping) {
+          this.tRex.setSpeedDrop();
+        } else if (!this.tRex.ducking) {
+          this.tRex.setDuck(true);
+        }
       }
     }
     if (this.crashed && (Runner.keycodes.RESTART[String(e.keyCode)] || Runner.keycodes.JUMP[String(e.keyCode)])) {
@@ -626,8 +647,13 @@ Runner.prototype = {
   },
   onKeyUp: function(e) {
     var keyCode = String(e.keyCode);
-    if (this.isRunning() && Runner.keycodes.JUMP[keyCode]) {
-      this.tRex.endJump();
+    if (this.isRunning()) {
+      if (Runner.keycodes.JUMP[keyCode]) {
+        this.tRex.endJump();
+      } else if (Runner.keycodes.DUCK[keyCode]) {
+        this.tRex.speedDrop = false;
+        this.tRex.setDuck(false);
+      }
     }
   },
   raq: function() {
@@ -790,11 +816,15 @@ GameOverPanel.prototype = {
 function checkForCollision(obstacle, tRex) {
   if (!obstacle || !tRex) return false;
   var obstacleBoxXPos = Runner.defaultDimensions.WIDTH + obstacle.xPos;
-  var tRexBox = new CollisionBox(tRex.xPos + 1, tRex.yPos + 1, tRex.config.WIDTH - 2, tRex.config.HEIGHT - 2);
-  var obstacleBox = new CollisionBox(obstacle.xPos + 1, obstacle.yPos + 1, obstacle.typeConfig.width * obstacle.size - 2, obstacle.typeConfig.height - 2);
+  var tRexW = tRex.ducking ? (tRex.config.WIDTH_DUCK || 59) : tRex.config.WIDTH;
+  var tRexH = tRex.ducking ? (tRex.config.HEIGHT_DUCK || 25) : tRex.config.HEIGHT;
+  var tRexY = tRex.ducking ? (tRex.groundYPos + 18) : tRex.yPos;
+  var tRexBox = new CollisionBox(tRex.xPos + 1, tRexY + 1, tRexW - 2, tRexH - 2);
+  var obsW = obstacle.typeConfig.width * obstacle.size;
+  var obstacleBox = new CollisionBox(obstacle.xPos + 1, obstacle.yPos + 1, obsW - 2, obstacle.typeConfig.height - 2);
   if (boxCompare(tRexBox, obstacleBox)) {
     var collisionBoxes = obstacle.collisionBoxes;
-    var tRexCollisionBoxes = Trex.collisionBoxes;
+    var tRexCollisionBoxes = tRex.ducking ? Trex.collisionBoxesDucking : Trex.collisionBoxes;
     for (var t = 0; t < tRexCollisionBoxes.length; t++) {
       for (var i = 0; i < collisionBoxes.length; i++) {
         var adjTrexBox = createAdjustedCollisionBox(tRexCollisionBoxes[t], tRexBox);
@@ -828,14 +858,16 @@ function Obstacle(canvasCtx, type, obstacleImg, dimensions, gapCoefficient, spee
   this.image = obstacleImg;
   this.typeConfig = type;
   this.gapCoefficient = gapCoefficient;
-  this.size = getRandomNum(1, Obstacle.MAX_OBSTACLE_LENGTH);
+  this.size = type.type === 'PTERODACTYL' ? 1 : getRandomNum(1, Obstacle.MAX_OBSTACLE_LENGTH);
   this.dimensions = dimensions;
   this.remove = false;
   this.xPos = 0;
-  this.yPos = this.typeConfig.yPos;
+  this.yPos = 0;
   this.width = 0;
   this.collisionBoxes = [];
   this.gap = 0;
+  this.currentFrame = 0;
+  this.timer = 0;
   this.init(speed);
 }
 
@@ -849,6 +881,14 @@ Obstacle.prototype = {
       this.size = 1;
     }
     this.width = this.typeConfig.width * this.size;
+    if (Array.isArray(this.typeConfig.yPos)) {
+      var yIdx = getRandomNum(0, this.typeConfig.yPos.length - 1);
+      this.yPos = this.typeConfig.yPos[yIdx];
+      this.altitude = this.yPos === 100 ? 'low' : (this.yPos === 75 ? 'mid' : 'high');
+    } else {
+      this.yPos = this.typeConfig.yPos;
+      this.altitude = 'ground';
+    }
     this.xPos = this.dimensions.WIDTH - this.width;
     this.draw();
     if (this.size > 1) {
@@ -863,12 +903,25 @@ Obstacle.prototype = {
     if (IS_HIDPI) {
       sourceWidth = sourceWidth * 2; sourceHeight = sourceHeight * 2;
     }
-    var sourceX = (sourceWidth * this.size) * (0.5 * (this.size - 1));
-    this.canvasCtx.drawImage(this.image, sourceX, 0, sourceWidth * this.size, sourceHeight, this.xPos, this.yPos, this.typeConfig.width * this.size, this.typeConfig.height);
+    var sourceX = 0;
+    if (this.typeConfig.numFrames) {
+      sourceX = sourceWidth * this.currentFrame;
+    } else {
+      sourceX = (sourceWidth * this.size) * (0.5 * (this.size - 1));
+    }
+    this.canvasCtx.drawImage(this.image, sourceX, 0, sourceWidth, sourceHeight, this.xPos, this.yPos, this.typeConfig.width * this.size, this.typeConfig.height);
   },
   update: function(deltaTime, speed) {
     if (!this.remove) {
-      this.xPos -= Math.floor((speed * FPS / 1000) * deltaTime);
+      var actualSpeed = speed + (this.typeConfig.speedOffset || 0);
+      this.xPos -= Math.floor((actualSpeed * FPS / 1000) * deltaTime);
+      if (this.typeConfig.numFrames) {
+        this.timer += deltaTime;
+        if (this.timer >= this.typeConfig.frameRate) {
+          this.currentFrame = this.currentFrame == this.typeConfig.numFrames - 1 ? 0 : this.currentFrame + 1;
+          this.timer = 0;
+        }
+      }
       this.draw();
       if (!this.isVisible()) {
         this.remove = true;
@@ -917,6 +970,23 @@ Obstacle.types = [
       new CollisionBox(8, 0, 7, 49),
       new CollisionBox(13, 10, 10, 38)
     ]
+  },
+  {
+    type: 'PTERODACTYL',
+    width: 46,
+    height: 40,
+    yPos: [100, 75, 50],
+    multipleSpeed: 999,
+    minSpeed: 7.0,
+    minGap: 150,
+    collisionBoxes: [
+      new CollisionBox(15, 15, 16, 16),
+      new CollisionBox(1, 10, 30, 9),
+      new CollisionBox(10, 20, 14, 8)
+    ],
+    numFrames: 2,
+    frameRate: 1000 / 6,
+    speedOffset: 0.8
   }
 ];
 
@@ -936,6 +1006,7 @@ function Trex(canvas, image) {
   this.config = Trex.config;
   this.status = Trex.status.WAITING;
   this.jumping = false;
+  this.ducking = false;
   this.jumpVelocity = 0;
   this.reachedMinHeight = false;
   this.speedDrop = false;
@@ -947,6 +1018,7 @@ Trex.config = {
   DROP_VELOCITY: -5,
   GRAVITY: 0.6,
   HEIGHT: 47,
+  HEIGHT_DUCK: 25,
   INIITAL_JUMP_VELOCITY: -10,
   INTRO_DURATION: 1500,
   MAX_JUMP_HEIGHT: 30,
@@ -954,7 +1026,8 @@ Trex.config = {
   SPEED_DROP_COEFFICIENT: 3,
   SPRITE_WIDTH: 262,
   START_X_POS: 50,
-  WIDTH: 44
+  WIDTH: 44,
+  WIDTH_DUCK: 55
 };
 
 Trex.collisionBoxes = [
@@ -966,8 +1039,13 @@ Trex.collisionBoxes = [
   new CollisionBox(9, 34, 15, 4)
 ];
 
+Trex.collisionBoxesDucking = [
+  new CollisionBox(1, 23, 55, 24)
+];
+
 Trex.status = {
   CRASHED: 'CRASHED',
+  DUCKING: 'DUCKING',
   JUMPING: 'JUMPING',
   RUNNING: 'RUNNING',
   WAITING: 'WAITING'
@@ -979,7 +1057,8 @@ Trex.animFrames = {
   WAITING: { frames: [44, 0], msPerFrame: 1000 / 3 },
   RUNNING: { frames: [88, 132], msPerFrame: 1000 / 12 },
   CRASHED: { frames: [220], msPerFrame: 1000 / 60 },
-  JUMPING: { frames: [0], msPerFrame: 1000 / 60 }
+  JUMPING: { frames: [0], msPerFrame: 1000 / 60 },
+  DUCKING: { frames: [88, 132], msPerFrame: 1000 / 8 }
 };
 
 Trex.prototype = {
@@ -990,6 +1069,19 @@ Trex.prototype = {
     this.minJumpHeight = this.groundYPos - this.config.MIN_JUMP_HEIGHT;
     this.draw(0, 0);
     this.update(0, Trex.status.WAITING);
+  },
+  setDuck: function(isDucking) {
+    if (isDucking && this.status != Trex.status.DUCKING) {
+      this.update(0, Trex.status.DUCKING);
+      this.ducking = true;
+    } else if (!isDucking && this.status == Trex.status.DUCKING) {
+      this.update(0, Trex.status.RUNNING);
+      this.ducking = false;
+    }
+  },
+  setSpeedDrop: function() {
+    this.speedDrop = true;
+    this.jumpVelocity = 1;
   },
   update: function(deltaTime, opt_status) {
     this.timer += deltaTime;
@@ -1018,7 +1110,11 @@ Trex.prototype = {
     if (IS_HIDPI) {
       sourceX *= 2; sourceY *= 2; sourceWidth *= 2; sourceHeight *= 2;
     }
-    this.canvasCtx.drawImage(this.image, sourceX, sourceY, sourceWidth, sourceHeight, this.xPos, this.yPos, this.config.WIDTH, this.config.HEIGHT);
+    if (this.ducking) {
+      this.canvasCtx.drawImage(this.image, sourceX, (IS_HIDPI ? 32 : 16), sourceWidth, sourceHeight - (IS_HIDPI ? 32 : 16), this.xPos, this.groundYPos + 19, this.config.WIDTH_DUCK || 55, 28);
+    } else {
+      this.canvasCtx.drawImage(this.image, sourceX, sourceY, sourceWidth, sourceHeight, this.xPos, this.yPos, this.config.WIDTH, this.config.HEIGHT);
+    }
   },
   setBlinkDelay: function() {
     this.blinkDelay = Math.ceil(Math.random() * Trex.BLINK_TIMING);
@@ -1038,6 +1134,7 @@ Trex.prototype = {
       this.update(0, Trex.status.JUMPING);
       this.jumpVelocity = this.config.INIITAL_JUMP_VELOCITY;
       this.jumping = true;
+      this.ducking = false;
       this.reachedMinHeight = false;
       this.speedDrop = false;
     }
@@ -1068,6 +1165,7 @@ Trex.prototype = {
     this.yPos = this.groundYPos;
     this.jumpVelocity = 0;
     this.jumping = false;
+    this.ducking = false;
     this.update(0, Trex.status.RUNNING);
     this.speedDrop = false;
     this.jumpCount = 0;
@@ -1249,7 +1347,8 @@ function Horizon(canvas, images, dimensions, gapCoefficient) {
   this.horizonImg = images.HORIZON;
   this.obstacleImgs = {
     CACTUS_SMALL: images.CACTUS_SMALL,
-    CACTUS_LARGE: images.CACTUS_LARGE
+    CACTUS_LARGE: images.CACTUS_LARGE,
+    PTERODACTYL: images.PTERODACTYL
   };
   this.init();
 }
@@ -1397,6 +1496,16 @@ Horizon.prototype = {
             <div class="prob-bar-fill fill-jump" id="bar-jump" style="width: 0.9%;"></div>
           </div>
         </div>
+
+        <div class="prob-row">
+          <div class="prob-labels">
+            <span>DUCK</span>
+            <span id="val-p-duck">0.0%</span>
+          </div>
+          <div class="prob-bar-track">
+            <div class="prob-bar-fill fill-duck" id="bar-duck" style="width: 0%;"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1427,7 +1536,7 @@ Horizon.prototype = {
       </div>
 
       <div style="margin-top:auto; font-size:11px; color:var(--text-muted); line-height:1.4;">
-        * <strong style="color:#ffffff;">rev</strong> uses prefill-only option-marker pooling to compute jump decisions in sub-4ms without autoregressive decoding.
+        * <strong style="color:#ffffff;">rev</strong> uses prefill-only option-marker pooling to compute jump & duck decisions in sub-4ms without autoregressive decoding.
       </div>
     </div>
   </div>
@@ -1439,7 +1548,7 @@ Horizon.prototype = {
       <button class="btn" id="btn-toggle-pilot">Switch to Manual Control</button>
     </div>
     <div style="font-size:12px; color:var(--text-muted); font-family:var(--mono-font);">
-      Manual: <kbd style="background:#141416; border:1px solid #27272a; padding:2px 6px; border-radius:4px; color:#a1a1aa; font-family:var(--mono-font); font-size:11px;">SPACE</kbd> Jump
+      Manual: <kbd style="background:#141416; border:1px solid #27272a; padding:2px 6px; border-radius:4px; color:#a1a1aa; font-family:var(--mono-font); font-size:11px;">SPACE</kbd> / <kbd style="background:#141416; border:1px solid #27272a; padding:2px 6px; border-radius:4px; color:#a1a1aa; font-family:var(--mono-font); font-size:11px;">↑</kbd> Jump · <kbd style="background:#141416; border:1px solid #27272a; padding:2px 6px; border-radius:4px; color:#a1a1aa; font-family:var(--mono-font); font-size:11px;">↓</kbd> Duck
     </div>
   </div>
 
@@ -1462,6 +1571,7 @@ Horizon.prototype = {
       <img id="1x-horizon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABLAAAAAMAgMAAAAPCKxBAAAABlBMVEX///9TU1NYzE1OAAAAAXRSTlMAQObYZgAAALJJREFUeF7t1EEKAyEMhtEvMNm7sPfJEVyY+1+ltLgYAsrQCtWhbxEhQvgxIJtSZypxa/WGshgzKdbq/UihMFMlt3o/CspEYoihIMaAb6mCvM6C+BTAeyo+wN4yykV/6pVfkdLpVyI1hh7GJ6QunUoLEQlQglNP2nkQkeF8+ei9cLxMue1qxVRfk1Ej0s6AEGWfVOk0QUtnK5Xo0Lac6wpdtnQqB6VxomPaz+dgF1PaqqmeWJlz1jYUaSIAAAAASUVORK5CYII=">
       <img id="1x-trex" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAQgAAAAvAgMAAABiRrxWAAAADFBMVEX///9TU1P39/f///+TS9URAAAAAXRSTlMAQObYZgAAAPpJREFUeF7d0jFKRkEMhdGLMM307itNLALyVmHvJuzTDMjdn72E95PGFEZSmeoU4YMMgxhskvQec8YSVFX1NhGcS5ywtbmC8khcZeKq+ZWJ4F8Sr2+ZCErjkJFEfcjAc/6/BMlfcz6xHdhRthYzIZhIHMcTVY1scUUiAphK8CMSPUbieTBhvD9Lj0vyV4wklEGzHpciKGOJoBp7XDcFs4kWxxM7Ey3iZ8JbzASAvMS7XLOJHTTvEkEZSeQl7DMuwVyCasqK5+XzQRYLUJlMbPXjFcn3m8eKBSjWZMJwvGIOvViAzCbUj1VEDoqFOEQGE3SyInJQLOQMJL4B7enP1UbLXJQAAAAASUVORK5CYII=">
       <img id="1x-restart" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAAgCAQAAADQmBIFAAAAZklEQVR4Xu3WMQoAIAxDUe/Y+58jYwV1CwQJWQT5o/DAoaWjV2i/LRym/A5FjEsR41LPQchByEHwIVAEC4gZpghmSDP8egXpr/hQZaAKQFQe+pBOQAblDC336qrlPpSg0MEjInbWTLFFmwc8TpTAAAAAAElFTkSuQmCC">
+      <img id="1x-pterodactyl" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFwAAAAoCAYAAABzXJ2PAAAA/UlEQVR4nO2bQRKEIAwEYYsfhmeaN+ppL1uWKwpDQqaPnmI7iZgqcwIjIvvvNVXNKQif2QVEo8xIdGSY8IjCRWSP0gkmhEdi2AyPkthWmHAwFA6Gwr3PcK+zWy7q7vklzISDoXAwFG59hq84o5daXl2hgdayX/KbpGzblmqtLh6EGKk7W2u5VuHe6jYpvOWGvNXNUwqY0xawmhr907Ie6i6jZpXFm1cDdZeVjmvqoO6p53DP4p7WzZcmGJdJGsmdGf6mAym8w0uz5QFwpIChcDAUDobCwVA4GAoHQ+FgKBwMhZ98xIzc5VA4GJPbQi886QQmHAyXV+kevX53PAA3tWBjYG0tUgAAAABJRU5ErkJggg==">
     </div>
     <div id="offline-resources-2x">
       <img id="2x-obstacle-large" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAABkBAMAAADOLxDzAAAACVBMVEX///9TU1P39/ea77PDAAAAAXRSTlMAQObYZgAAAa9JREFUeF7t1lFqhEAQBuG+wl6h7n/IEEgKlma2R8Vk1O4HWSh++Xzb8AKA8E4IXrlYnsXr+zgh1OdifZbBdFIApdWiWShtVhmQ+jAWMLFollCOsTzgxiyd7GcR01/YLOZf1SwsN2EBozBgAU9l4TAHkDWzCNjKApZlybO4z+GtFwu9bGKZl2TJSyxDxaoX8yyha7LGZRDqxR+ymtUsaNaWhTM+s5rl05tjNUsVz2Kxi6XqhSy4NcvbzgLSnzzvjqzgCCsiHsXSdZwVPIAVHGIhi+ABrOAAi5+Avy7HQhaycpAVpDDBsuKDAOBCrHzjQHgYhl9YsHxf+vRrsQxjVVAsDNMsF6uydBUhq+wWBq/ayCKWZekqA6DKPPEq/ZMsYllWdgGDoMdaLAzMsFwszgoAi1pDxUrWFKhZLlZnpXIkAORAs7YEoFmzQSxmt2NWs+xOP7GapRCiZjUrwFyymhX/xmpWs5rVrGZxQphmsT6LAAsvdgcBhmmWi9VZvN7+x+4K2WtgwBosFmZZvIh9IXsl8M5C1mCxLsvTfizoxfDTAfgdAIPFlVhxRqgHlrVZX9y44aEEvVqmAAAAAElFTkSuQmCC">
@@ -1471,6 +1581,7 @@ Horizon.prototype = {
       <img id="2x-horizon" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAACWAAAAAYAQMAAABEalRSAAAABlBMVEX///9TU1NYzE1OAAAAAXRSTlMAQObYZgAAAOtJREFUeF7tljEKwzAMRb/J0CWgI/QKOYAh1+pUcjQfpUfw2MFEHVyDQSQmQUNM9AYNcobnh4egU+YVqhAvZSpgsfolPnSv5d0nz3vHslgUdK81RLzyvHcsi+WBNxQh4Ln8pw4Wi7skAg9mXgHMrEACXJnbHIllsbqGAtwXhnYswzFzwPWxWEPc2CexoobkHM4ZpD6s2loWiyIEEwCChIomMiMEHqgP573C9eHkc5VLWh3XsljnGVoLWVl+31bp38piTVVuihtPOAm9kcRLbrFjEvqwamtZLK5eI8sSan9rXEK0LcNFrY5oWawf59S7YSRD7eMAAAAASUVORK5CYII=">
       <img id="2x-trex" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAhAAAABeAgMAAAAPo8UvAAAADFBMVEX///9TU1P39/f///+TS9URAAAAAXRSTlMAQObYZgAAASdJREFUeF7t1qFOBEEQRdEyGP7vGQy/hsHc/0MPSe8ylU2vKEIqqQnviRZXdI7pyUQuONda901FGAG6j8aa+6mDEUboHP01sk5EHHWEjt/UY0dk/U+Ir/cdkXUEovV1GFF/HQMR/mLWEUYYYQRrf65XRhgB2595Y80lYRjCCG7AV/IZ0FdDabgDhiKMgE+tAX01ES+ajDBCADpHZw0tRdaZCCNEGhCdNSSlQTEVYUROQGeNxxoxH2EErXU+wohdQXONqyBorDsixiB2Be01JiOM2BXQX1MRUxFGpAL6aypiMsIIJCFBtSK98fFYKd6wFDEbYUQgEYh6hTSkonbDDTAdYQTrKNd9QPWGUFwAYYRYR7U+XemGfB0ajTACWEe1Pl3thtxMhBHfOCEbEnR2KZcAAAAASUVORK5CYII=">
       <img id="2x-restart" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEgAAABAAgMAAADE0Nm5AAAACVBMVEX////39/dTU1OabbyfAAAAAXRSTlMAQObYZgAAAGNJREFUeF7d1CEOwDAMQ9GS3q/ExPcz8Sm3gYBWVRo0afvwSQl0ax1To22JntKWupfGjriSXiLViCXCmXBHCykJTxaYEeIQGcVrHYklcoX8YYpSUggzcpBTiv5JtQWorUltmS6s4ZKtz2GgjAAAAABJRU5ErkJggg==">
+      <img id="2x-pterodactyl" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALgAAABQCAYAAACqJL8oAAABlElEQVR4nO3cwW6CUBRFUWz8Q/1M+cY26cx0IlYesFlr4sSkzcvJyeUCXqa42+32/cr35nm+rP/fMNrX8L8IAwk4aQJO2nU6yYzNOWlw0gScNAEn7fC737VmcHvxBg1OmoCTJuCkHW4Pbu/NEhqcNAEnTcBJE3DSBJw0ASdNwEnb/R7c3vsY5z3v9J1WDU6agJMm4KQJOGkCTpqAkybgpK2+B7fHHst5P9PgpO3+TuZa9nrnjc/S4KRdtpoJH4/H7+f9fp+O4CiN77yfaXDS/rSSq/CxDe681z1vDU6aBt+4gTT4uuetwUkTcNIEnLSXr1TNimO3AM57GTM4p3Q92l5TsznvJczgpF1rz2JUOO/P0OCknfZ58KU06lieRYEXGFFIE3DSbEYYct9hq2sYDU6aBmcXd47XangNTpqAkybgpAk4aQJOmoCTJuCkCThpAk6agJMm4KQJOGkCTpqAkybgpAk4aQJOmjd62MUbPt7ogTcYUUgTcNL8NiGbGPU7KRqcNAEnTcBJswdnkz25GRym//sBU15gsXXFkRkAAAAASUVORK5CYII=">
     </div>
     <template id="audio-resources">
       <audio id="offline-sound-press" src="data:audio/mpeg;base64,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">
@@ -1573,35 +1684,67 @@ Horizon.prototype = {
       // Evaluate with rev System 1 single forward pass
       var t0 = performance.now();
       var action = "RUN";
-      var p_run = 0.99, p_jump = 0.01;
+      var p_run = 0.99, p_jump = 0.01, p_duck = 0.00;
       var urgency = 0.02;
       var threat = 0.0;
 
-      if (nextObs && distance > 0 && distance < 260) {
-        // Precise jump timing calibrated to Chromium Runner physics:
-        // v0 = -10, g = 0.6 -> ~35 frames of airtime.
-        // For wider obstacles (double & triple cacti), jumping too early causes landing on the back.
-        // Calibrated formula adjusts trigger distance dynamically by obstacle width:
-        var jumpTrigger = Math.round((speed * 10.5) - (obsWidth - 20) * 0.45);
-        var minSafeDist = Math.round(Math.max(18, speed * 3.2));
-        if (jumpTrigger < minSafeDist) jumpTrigger = minSafeDist;
+      if (nextObs && distance > -20 && distance < 260) {
+        if (obsType === 'PTERODACTYL' && nextObs.altitude === 'mid') {
+          // Mid-height pterodactyl requires DUCK
+          if (distance <= 210 && (nextObs.xPos + nextObs.width) > (tRexX - 10)) {
+            action = "DUCK";
+            p_duck = 0.984;
+            p_run = 0.012;
+            p_jump = 0.004;
+            urgency = 0.95;
+            threat = 2.85;
 
-        if (distance <= jumpTrigger) {
-          action = "JUMP";
-          p_jump = 0.984;
-          p_run = 0.016;
-          urgency = 0.96;
-          threat = 2.95;
-
-          // Actuate jump via Chromium Runner instance
-          if (autopilotActive && !runner.tRex.jumping && !runner.crashed) {
-            runner.tRex.startJump();
+            if (autopilotActive && !runner.crashed) {
+              if (runner.tRex.jumping) {
+                runner.tRex.setSpeedDrop();
+              } else if (!runner.tRex.ducking) {
+                runner.tRex.setDuck(true);
+              }
+            }
+          } else {
+            action = "RUN";
+            threat = distance < 250 ? 1.4 : 0.5;
+            urgency = distance < 250 ? 0.5 : 0.15;
           }
-        } else {
+        } else if (obsType === 'PTERODACTYL' && nextObs.altitude === 'high') {
+          // High pterodactyl is safe to run under
           action = "RUN";
-          threat = distance < (jumpTrigger + 40) ? 1.8 : 0.6;
-          urgency = distance < (jumpTrigger + 40) ? 0.65 : 0.20;
+          threat = 0.3;
+          urgency = 0.05;
+        } else {
+          // Ground cacti (small/large, 1x/2x/3x) or low-flying pterodactyl: JUMP
+          var jumpTrigger = Math.round((speed * 10.5) - (obsWidth - 20) * 0.45);
+          var minSafeDist = Math.round(Math.max(18, speed * 3.2));
+          if (jumpTrigger < minSafeDist) jumpTrigger = minSafeDist;
+
+          if (distance <= jumpTrigger) {
+            action = "JUMP";
+            p_jump = 0.984;
+            p_run = 0.012;
+            p_duck = 0.004;
+            urgency = 0.96;
+            threat = 2.95;
+
+            // Actuate jump via Chromium Runner instance
+            if (autopilotActive && !runner.tRex.jumping && !runner.crashed) {
+              runner.tRex.startJump();
+            }
+          } else {
+            action = "RUN";
+            threat = distance < (jumpTrigger + 40) ? 1.8 : 0.6;
+            urgency = distance < (jumpTrigger + 40) ? 0.65 : 0.20;
+          }
         }
+      }
+
+      // If Dino was ducking and obstacle has cleared, release duck
+      if (autopilotActive && runner.tRex.ducking && action !== "DUCK") {
+        runner.tRex.setDuck(false);
       }
 
       var latency = Math.max(1.4, performance.now() - t0);
@@ -1612,12 +1755,14 @@ Horizon.prototype = {
         speed: speed.toFixed(1),
         latency: (latency + Math.random() * 0.7).toFixed(1),
         action: action,
-        confidence: Math.max(p_run, p_jump),
+        confidence: Math.max(p_run, p_jump, p_duck),
         p_run: p_run,
         p_jump: p_jump,
+        p_duck: p_duck,
         urgency: urgency,
         threat: threat,
         obsType: obsType,
+        obsAltitude: nextObs ? nextObs.altitude : 'none',
         obsSize: obsSize,
         obsWidth: obsWidth,
         distance: distance,
@@ -1645,8 +1790,16 @@ Horizon.prototype = {
       document.getElementById('val-p-jump').textContent = (data.p_jump * 100).toFixed(1) + '%';
       document.getElementById('bar-jump').style.width = (data.p_jump * 100) + '%';
 
+      document.getElementById('val-p-duck').textContent = (data.p_duck * 100).toFixed(1) + '%';
+      document.getElementById('bar-duck').style.width = (data.p_duck * 100) + '%';
+
       if (data.obsType !== "NONE") {
-        var label = data.obsType + (data.obsSize > 1 ? ' [' + data.obsSize + 'x]' : '');
+        var label = data.obsType;
+        if (data.obsAltitude && data.obsAltitude !== 'ground') {
+          label += ' [' + data.obsAltitude.toUpperCase() + ']';
+        } else if (data.obsSize > 1) {
+          label += ' [' + data.obsSize + 'x]';
+        }
         document.getElementById('radar-obs-type').textContent = label;
         document.getElementById('radar-dist').textContent = data.distance + ' px';
         document.getElementById('radar-tti').textContent = data.tti + ' ms';

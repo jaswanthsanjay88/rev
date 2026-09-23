@@ -50,21 +50,48 @@ _STOP = {
     "en": {"the", "and", "is", "are", "was", "were", "to", "of", "in", "for", "with", "that",
            "this", "it", "you", "have", "has", "not", "but", "on", "at", "be", "as", "from",
            "will", "can", "would", "there", "their", "what", "which", "please", "we", "i"},
-    "fr": {"le", "la", "les", "des", "un", "une", "est", "pour", "dans", "que", "qui", "avec", "sur",
-           "pas", "plus", "nous", "vous", "être", "cette", "mais", "sont", "ont", "aux", "ce", "je", "du", "mon", "ma", "mes"},
+    "fr": {"le", "la", "les", "des", "une", "est", "pour", "dans", "que", "qui", "avec", "sur",
+           "pas", "plus", "nous", "vous", "être", "cette", "mais", "sont", "ont", "aux", "ce",
+           "et", "du", "au", "ou", "je", "tu", "il", "elle", "ils", "elles", "mon", "ton",
+           "ma", "ta", "sa", "mes", "tes", "ses", "ces", "deux", "trois", "très", "bien",
+           "tout", "tous", "toute", "fait", "veux", "veut", "peux", "peut", "dois", "doit",
+           "merci", "bonjour", "jour", "jours", "mois", "fois", "quand", "comment", "pourquoi",
+           "alors", "donc"},
     "de": {"der", "die", "das", "und", "ist", "ein", "eine", "den", "dem", "nicht", "mit", "für",
-           "auf", "von", "zu", "sich", "auch", "werden", "wurde", "haben", "sind", "oder", "aber", "ich", "wir"},
-    "es": {"el", "los", "las", "que", "por", "con", "para", "una", "un", "es", "se", "del", "como",
-           "pero", "son", "está", "este", "esta", "todo", "más", "muy", "hay", "sus", "mi", "yo"},
+           "auf", "von", "zu", "sich", "auch", "werden", "wurde", "haben", "sind", "oder", "aber"},
+    "es": {"el", "los", "las", "que", "por", "con", "para", "una", "es", "se", "del", "como",
+           "pero", "son", "está", "este", "esta", "todo", "más", "muy", "hay", "sus",
+           "la", "un", "y", "al", "lo", "le", "les", "su", "mi", "tu", "nos",
+           "ni", "dos", "tres", "fue", "fueron", "ser", "tiene", "tienen", "tengo", "puede",
+           "pueden", "quiero", "necesito", "hemos", "han", "sobre", "entre", "cuando", "donde",
+           "porque", "aunque", "también", "ya", "eso", "esto", "esa", "ese", "nada", "algo",
+           "aquí", "hoy", "gracias"},
     "pt": {"os", "as", "que", "em", "um", "uma", "para", "com", "não", "é", "se", "do", "da",
-           "dos", "das", "mas", "são", "está", "este", "esta", "muito", "pelo", "pela"},
+           "dos", "das", "mas", "são", "está", "este", "esta", "muito", "pelo", "pela",
+           "o", "e", "na", "nas", "nos", "ao", "aos", "por", "foi", "era", "ser", "sou",
+           "tem", "tenho", "pode", "podem", "quero", "preciso", "eu", "meu", "minha", "seu",
+           "sua", "isso", "isto", "aqui", "ali", "como", "quando", "onde", "porque", "mais",
+           "já", "ainda", "agora", "hoje", "ontem", "dois", "três", "tudo", "nada", "obrigado",
+           "olá"},
     "it": {"il", "lo", "gli", "che", "di", "per", "con", "non", "è", "si", "del", "della", "sono",
-           "questo", "questa", "anche", "come", "più", "sono", "nella", "alla"},
+           "questo", "questa", "anche", "come", "più", "sono", "nella", "alla",
+           "la", "le", "un", "uno", "una", "e", "ed", "o", "da", "su", "tra", "fra", "mi",
+           "ci", "ne", "ho", "hai", "ha", "abbiamo", "avete", "hanno", "era", "stato", "stata",
+           "devo", "deve", "devono", "voglio", "vorrei", "mio", "mia", "tuo", "sua", "quando",
+           "dove", "perche", "molto", "poco", "sempre", "mai", "già", "ancora", "adesso", "oggi",
+           "ieri", "grazie", "ciao", "scusa",
+           "nel", "nell", "negli", "sul", "sulla", "sulle", "dal", "dalla", "dallo", "dagli", "dei",
+           "delle", "dello", "degli", "agli", "alle", "col"},
     "nl": {"het", "een", "van", "is", "op", "te", "dat", "niet", "met", "voor", "zijn", "aan",
            "door", "maar", "ook", "worden", "deze", "naar", "wordt"},
     "ro": {"și", "să", "este", "sunt", "care", "pentru", "din", "dar", "după", "până", "fără",
            "ale", "lui", "în", "fost", "acum", "vreau", "trebuie", "foarte", "acest", "această",
            "acesta", "aceasta", "mi", "ți", "vă", "nu"},
+}
+
+_SHARED_WORDS = {
+    w for w in {word for words in _STOP.values() for word in words}
+    if sum(w in words for words in _STOP.values()) > 1
 }
 
 _NON_EN_DIACRITICS = set(
@@ -165,13 +192,11 @@ def latin_profile(text: str) -> Dict[str, object]:
 
     scores = {lg: sum(1 for w in words if w in sw) for lg, sw in _STOP.items()}
     en = scores.get("en", 0)
-    best_lg, best = max(
-        ((lg, s) for lg, s in scores.items() if lg != "en"),
-        key=lambda kv: kv[1],
-        default=(None, 0),
-    )
-    if best == 0:
-        best_lg = None
+    evidenced = {
+        lg: s for lg, s in scores.items()
+        if lg != "en" and any(w not in _SHARED_WORDS for w in set(words) & _STOP[lg])
+    }
+    best_lg, best = max(evidenced.items(), key=lambda kv: kv[1], default=(None, 0))
 
     lang = None
     if best_lg and best >= max(2, en + 2):

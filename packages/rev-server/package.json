@@ -1,0 +1,28 @@
+{
+  "name": "rev-server",
+  "version": "0.2.2",
+  "description": "Fast System 1 Decision Engine Server CLI for rev",
+  "main": "bin/cli.js",
+  "bin": {
+    "rev-server": "bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "rev",
+    "rev-server",
+    "decision-engine",
+    "system-one",
+    "server",
+    "cli"
+  ],
+  "author": "Jaswanth Sanjay <jaswanthsanjay88@gmail.com>",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaswanthsanjay88/rev.git"
+  }
+}

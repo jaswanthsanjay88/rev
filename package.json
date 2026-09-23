@@ -1,0 +1,15 @@
+{
+  "name": "rev",
+  "version": "0.2.2",
+  "description": "rev: Fast Prefill-Only System 1 Decision Engine",
+  "private": true,
+  "scripts": {
+    "server": "py -m rev.serve --port 8000 --mock",
+    "server:neural": "py -m rev.serve --port 8000",
+    "server:node": "node packages/rev-decision/bin/cli.js --port 8000",
+    "start": "py -m rev.serve --port 8000 --mock",
+    "playground": "npm --prefix playground run dev",
+    "dino": "py examples/run_dino_pygame.py",
+    "dino:web": "py examples/run_dino_visual.py"
+  }
+}

@@ -229,6 +229,15 @@ def route_preview(body: dict):
     return {"routing": dict(decision)}
 
 
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "mode": STATE["mode"],
+        "run": STATE["run"],
+    }
+
+
 @app.get("/api/info")
 def info():
     return {

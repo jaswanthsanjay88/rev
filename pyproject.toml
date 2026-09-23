@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rev-decision"
-version = "0.2.0"
+version = "0.2.2"
 description = "Fast, non-autoregressive System 1 decision engine with calibrated probabilities and sub-microsecond routing"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 authors = [
     { name = "Jaswanth Sanjay", email = "jaswanthsanjay88@gmail.com" }
 ]
@@ -28,7 +28,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -45,6 +44,7 @@ dependencies = [
     "pydantic>=2.8.0",
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
@@ -66,3 +66,7 @@ packages = ["rev"]
 Homepage = "https://github.com/jaswanthsanjay88/rev"
 Repository = "https://github.com/jaswanthsanjay88/rev"
 Model = "https://huggingface.co/jaswanthsanjay88/rev-decision-model"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".*", "build", "dist", "*.egg-info", "laya", "kev", "Chrome-Dino-Runner", "packages"]

@@ -28,14 +28,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
-          pip install -e .
+          pip install -e ".[dev]"
 
       - name: Verify package exports & PEP 561 marker
         run: |
-          python -c "import rev; assert hasattr(rev, 'predict'); assert hasattr(rev, 'Model'); assert hasattr(rev, 'presets'); print('rev imported successfully')"
+          python -c "import rev; assert rev.__version__ == '0.2.2'; assert hasattr(rev, 'predict'); assert hasattr(rev, 'Model'); assert hasattr(rev, 'presets'); print('rev imported successfully: v' + rev.__version__)"
           test -f rev/py.typed
 
       - name: Run unit tests
         run: |
-          pytest tests/test_unified_model.py tests/test_kv_cache.py -v
+          pytest tests/ -v
