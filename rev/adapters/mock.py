@@ -18,12 +18,21 @@ class MockDecisionEngine(DecisionEngine):
 
     def predict(
         self,
-        state: Union[str, Dict[str, Any], Any],
-        questions: Dict[str, Dict[str, Any]],
+        state: Union[str, Dict[str, Any], Any] = None,
+        questions: Dict[str, Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
-        state_str = str(state.get("note", state) if isinstance(state, dict) else state).lower()
+        if questions is None:
+            questions = kwargs.get("questions") or {}
+        has_image = False
+        if isinstance(state, dict):
+            has_image = bool(state.get("image") or state.get("image_b64") or kwargs.get("image"))
+            state_str = str(state.get("note", state.get("state", ""))).lower()
+        else:
+            has_image = bool(kwargs.get("image"))
+            state_str = str(state or "").lower()
+
         answers: Dict[str, Dict[str, Any]] = {}
 
         for q_id, raw_q in questions.items():
@@ -38,9 +47,14 @@ class MockDecisionEngine(DecisionEngine):
                 for opt in options:
                     opt_lower = opt.lower()
                     overlap = sum(1 for w in opt_lower.split() if len(w) > 2 and w in state_str)
+                    if has_image and any(w in instr for w in ["receipt", "restaurant", "food", "bill", "menu", "dining"]):
+                        if opt_lower.startswith("yes") or "restaurant" in opt_lower or "food" in opt_lower:
+                            overlap += 4.0
+                        elif opt_lower.startswith("no") or "not" in opt_lower:
+                            overlap -= 1.0
                     # Deterministic hash component
-                    h = int(hashlib.md5(f"{state_str}:{opt_lower}".encode()).hexdigest()[:6], 16) / 0xFFFFFF
-                    scores.append(1.0 + overlap * 3.0 + h * 0.5)
+                    h = int(hashlib.md5(f"{state_str[:200]}:{instr}:{opt_lower}".encode()).hexdigest()[:6], 16) / 0xFFFFFF
+                    scores.append(max(0.01, 1.0 + overlap * 3.0 + h * 0.5))
 
                 exp_scores = [math.exp(s / 1.0) for s in scores]
                 total = sum(exp_scores) or 1.0

@@ -104,28 +104,80 @@ class VisionDecisionEngine(DecisionEngine):
 
     def predict(
         self,
-        state: Union[str, Dict[str, Any], Any],
-        questions: Dict[str, Dict[str, Any]],
+        state: Union[str, Dict[str, Any], Any] = None,
+        questions: Optional[Dict[str, Dict[str, Any]]] = None,
+        image: Optional[Any] = None,
+        prompt: Optional[str] = None,
+        options: Optional[List[str]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
+        import base64
+        import io
         import torch
         import torch.nn.functional as F
         from PIL import Image
 
         t0 = time.perf_counter()
-        image = None
+
+        # 1. Support shorthand: model.predict(image=..., prompt=..., options=[...])
+        is_shorthand = False
+        if questions is None:
+            p = prompt or kwargs.get("prompt")
+            opts = options or kwargs.get("options")
+            if p and opts:
+                is_shorthand = True
+                questions = {
+                    "answer": {
+                        "type": "choice",
+                        "instructions": p,
+                        "criteria": {opt: opt for opt in opts},
+                    }
+                }
+            elif isinstance(state, dict) and "questions" in state:
+                questions = state["questions"]
+            else:
+                questions = {}
+
+        # 2. Extract image and textual context
+        img_input = image or kwargs.get("image") or kwargs.get("image_b64")
         note = ""
 
         if isinstance(state, dict):
-            image = state.get("image")
+            if img_input is None:
+                img_input = state.get("image") or state.get("image_b64")
             note = str(state.get("note", state.get("state", "")))
         elif isinstance(state, str):
-            note = state
+            if img_input is None and (
+                state.startswith("data:image/")
+                or (len(state) < 1000 and os.path.exists(state))
+            ):
+                img_input = state
+            else:
+                note = state
 
-        if isinstance(image, str) and os.path.exists(image):
-            image = Image.open(image).convert("RGB")
-        elif image is None:
-            image = Image.new("RGB", (512, 512), color="white")
+        # 3. Resolve img_input to a PIL Image (handling base64, paths, data URIs)
+        pil_image = None
+        if isinstance(img_input, Image.Image):
+            pil_image = img_input.convert("RGB")
+        elif isinstance(img_input, str):
+            if img_input.startswith("data:image"):
+                b64_data = img_input.split(",", 1)[-1]
+                pil_image = Image.open(io.BytesIO(base64.b64decode(b64_data))).convert("RGB")
+            elif len(img_input) < 1000 and os.path.exists(img_input):
+                pil_image = Image.open(img_input).convert("RGB")
+            else:
+                try:
+                    b64_bytes = base64.b64decode(img_input)
+                    pil_image = Image.open(io.BytesIO(b64_bytes)).convert("RGB")
+                except Exception:
+                    pil_image = Image.new("RGB", (512, 512), color="white")
+        elif hasattr(img_input, "read"):
+            pil_image = Image.open(img_input).convert("RGB")
+
+        if pil_image is None:
+            pil_image = Image.new("RGB", (512, 512), color="white")
+
+        image = pil_image
 
         newline_id = self.processor.tokenizer.encode("\n", add_special_tokens=False)[-1]
         answers: Dict[str, Dict[str, Any]] = {}
@@ -182,6 +234,17 @@ class VisionDecisionEngine(DecisionEngine):
                 }
 
         latency = (time.perf_counter() - t0) * 1000.0
+        if is_shorthand and answers:
+            q_res = list(answers.values())[0]
+            ans = q_res.get("choice", q_res.get("noul", q_res.get("score")))
+            return {
+                "answer": ans,
+                "confidence": q_res.get("confidence", 1.0),
+                "probabilities": q_res.get("probabilities", {str(ans): 1.0}),
+                "latency_ms": round(latency, 2),
+                "model": self.model_name,
+            }
+
         return {
             "answers": answers,
             "latency_ms": round(latency, 2),

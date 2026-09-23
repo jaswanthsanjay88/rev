@@ -20,8 +20,8 @@ class DecisionEngine(ABC):
     @abstractmethod
     def predict(
         self,
-        state: Union[str, Dict[str, Any], Any],
-        questions: Dict[str, Dict[str, Any]],
+        state: Union[str, Dict[str, Any], Any] = None,
+        questions: Optional[Dict[str, Dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """
@@ -46,8 +46,8 @@ class DecisionEngine(ABC):
 
     def __call__(
         self,
-        state: Union[str, Dict[str, Any], Any],
-        questions: Dict[str, Dict[str, Any]],
+        state: Union[str, Dict[str, Any], Any] = None,
+        questions: Optional[Dict[str, Dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Convenience alias allowing `model(state, questions)`."""

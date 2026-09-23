@@ -27,7 +27,9 @@ export interface ScoreQuestion {
 export type Question = ChoiceQuestion | NoulQuestion | ScoreQuestion;
 
 export interface SystemOneRequest {
-  state: JSONValue;
+  state?: JSONValue;
+  image?: string;
+  image_b64?: string;
   model?: string;
   questions: Record<string, Question>;
 }

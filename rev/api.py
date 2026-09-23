@@ -41,7 +41,9 @@ Question = Union[Noul, Choice, Score]
 
 
 class SystemOneRequest(BaseModel):
-    state: JSONContent
+    state: JSONContent = ""
+    image: str | None = None
+    image_b64: str | None = None
     model: str = "rev-latest"
     questions: dict[str, Question] = Field(min_length=1)
 
@@ -81,7 +83,13 @@ def to_record(req: SystemOneRequest):
             opts = [render(x) for x in q.criteria]
             meta.append({"id": qid, "type": "score", "legend": {str(i): render(x) for i, x in enumerate(q.criteria)}})
         qs.append({"instr": instr, "options": opts, "label": 0})
-    return {"state": render(req.state), "questions": qs}, meta
+    img = req.image or req.image_b64
+    if img is None and isinstance(req.state, dict):
+        img = req.state.get("image") or req.state.get("image_b64")
+    rec: dict[str, Any] = {"state": render(req.state), "questions": qs}
+    if img is not None:
+        rec["image"] = img
+    return rec, meta
 
 
 def choice_confidence(p: list[float]) -> float:
