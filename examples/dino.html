@@ -1690,8 +1690,9 @@ Horizon.prototype = {
 
       if (nextObs && distance > -20 && distance < 260) {
         if (obsType === 'PTERODACTYL' && nextObs.altitude === 'mid') {
-          // Mid-height pterodactyl requires DUCK
-          if (distance <= 210 && (nextObs.xPos + nextObs.width) > (tRexX - 10)) {
+          // Mid-height pterodactyl requires DUCK: crisp ~140ms reflex (approx 50-75px away)
+          var duckTrigger = Math.round(Math.max(50, speed * 4.2));
+          if (distance <= duckTrigger && (nextObs.xPos + nextObs.width) > (tRexX - 10)) {
             action = "DUCK";
             p_duck = 0.984;
             p_run = 0.012;
@@ -1708,8 +1709,8 @@ Horizon.prototype = {
             }
           } else {
             action = "RUN";
-            threat = distance < 250 ? 1.4 : 0.5;
-            urgency = distance < 250 ? 0.5 : 0.15;
+            threat = distance < (duckTrigger + 30) ? 1.4 : 0.5;
+            urgency = distance < (duckTrigger + 30) ? 0.5 : 0.15;
           }
         } else if (obsType === 'PTERODACTYL' && nextObs.altitude === 'high') {
           // High pterodactyl is safe to run under
