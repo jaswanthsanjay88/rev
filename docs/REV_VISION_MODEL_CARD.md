@@ -44,14 +44,14 @@ rev-vision projects the hidden states at each option's terminator token through 
 ## Installation
 
 ```bash
-pip install rev-vision
+pip install rev-decision
 ```
 
 Or install from source:
 
 ```bash
-git clone https://github.com/jaswanthsanjay88/rev-vision
-cd rev-vision
+git clone https://github.com/jaswanthsanjay88/rev
+cd rev
 pip install -e .
 ```
 
@@ -60,9 +60,9 @@ pip install -e .
 ## Quickstart
 
 ```python
-from rev_vision import RevVision
+from rev import Rev  # (or `from rev import RevVision`)
 
-model = RevVision.from_pretrained("jaswanthsanjay88/rev-vision")
+model = Rev.from_pretrained("jaswanthsanjay88/rev-vision")
 
 result = model.predict(
     image="receipt.jpg",
@@ -138,9 +138,9 @@ Expose it to your agent framework (OpenAI-style function calling, MCP tool, etc.
 ### 2. Minimal tool-server wrapper
 
 ```python
-from rev_vision import RevVision
+from rev import Rev
 
-model = RevVision.from_pretrained("jaswanthsanjay88/rev-vision")
+model = Rev.from_pretrained("jaswanthsanjay88/rev-vision")
 
 def rev_vision_decide(image: str, prompt: str, options: list[str]) -> dict:
     result = model.predict(image=image, prompt=prompt, options=options)

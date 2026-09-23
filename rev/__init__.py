@@ -57,8 +57,9 @@ from .router import (
 from .engine_base import DecisionEngine
 from .auto import Rev
 
-# Primary 'Model' and 'Rev' aliases
+# Primary 'Model', 'Rev', and 'RevVision' aliases
 Model = UnifiedModel
+RevVision = Rev
 
 # Candidate Shortlisting
 from .shortlist import (
@@ -105,6 +106,7 @@ except ImportError:
 __all__ = [
     # AutoModel & Core Contract
     "Rev",
+    "RevVision",
     "DecisionEngine",
     # Unified Model
     "Model",
