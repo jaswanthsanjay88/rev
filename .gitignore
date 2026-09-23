@@ -18,7 +18,8 @@ checkpoints/
 *.safetensors
 *.bin
 
-# Next.js Playground
+# Next.js Playground & Node
+node_modules/
 playground/node_modules/
 playground/.next/
 playground/out/

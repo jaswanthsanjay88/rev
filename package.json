@@ -11,5 +11,8 @@
     "playground": "npm --prefix playground run dev",
     "dino": "py examples/run_dino_pygame.py",
     "dino:web": "py examples/run_dino_visual.py"
+  },
+  "dependencies": {
+    "rev-server": "^0.2.2"
   }
 }
