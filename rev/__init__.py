@@ -53,7 +53,11 @@ from .router import (
     get_default_model,
 )
 
-# Primary 'Model' alias pointing to the unified engine
+# Core AutoModel & Base Contract
+from .engine_base import DecisionEngine
+from .auto import Rev
+
+# Primary 'Model' and 'Rev' aliases
 Model = UnifiedModel
 
 # Candidate Shortlisting
@@ -99,6 +103,9 @@ except ImportError:
     PointerHead = None
 
 __all__ = [
+    # AutoModel & Core Contract
+    "Rev",
+    "DecisionEngine",
     # Unified Model
     "Model",
     "UnifiedModel",
