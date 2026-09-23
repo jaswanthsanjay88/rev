@@ -14,7 +14,7 @@ Features:
   - Production presets for triage, email, guardrails, moderation, invoice, security, traces.
 """
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 # Language and Script Detection
 from . import lang

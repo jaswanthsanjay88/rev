@@ -1,6 +1,6 @@
 {
   "name": "rev-decision",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Fast, non-autoregressive System 1 decision engine client with calibrated probabilities",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
