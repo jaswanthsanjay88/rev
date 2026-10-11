@@ -23,6 +23,8 @@ def _detect_architecture(
         return "mock"
     if "vision" in m:
         return "vision"
+    if "lfm" in m or "liquid" in m:
+        return "lfm"
     if "4b" in m or "0.5b" in m or "qwen" in m:
         return "causal"
     if "decision-model" in m or "modernbert" in m or "laya" in m:
@@ -106,6 +108,15 @@ class Rev:
         if arch == "vision":
             from .adapters.vision import VisionDecisionEngine
             return VisionDecisionEngine(
+                model_id_or_path=pretrained_model_name_or_path,
+                device=device,
+                token=token,
+                **kwargs,
+            )
+
+        if arch == "lfm":
+            from .adapters.lfm import LFMDecisionEngine
+            return LFMDecisionEngine(
                 model_id_or_path=pretrained_model_name_or_path,
                 device=device,
                 token=token,
