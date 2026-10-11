@@ -37,8 +37,8 @@
   "target_modules": [
     "out_proj",
     "v_proj",
-    "q_proj",
-    "k_proj"
+    "k_proj",
+    "q_proj"
   ],
   "target_parameters": null,
   "task_type": null,

@@ -7,9 +7,7 @@
     "stride": 0
   },
   "padding": {
-    "strategy": {
-      "Fixed": 512
-    },
+    "strategy": "BatchLongest",
     "direction": "Right",
     "pad_to_multiple_of": null,
     "pad_id": 0,
