@@ -274,11 +274,20 @@ def main():
     config = AutoConfig.from_pretrained(args.base, trust_remote_code=True)
     dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float32
 
-    base_model = AutoModel.from_pretrained(
-        args.base,
-        torch_dtype=dtype,
-        trust_remote_code=True,
-    ).to(device)
+    try:
+        from transformers import AutoModelForMaskedLM
+        full_model = AutoModelForMaskedLM.from_pretrained(
+            args.base,
+            dtype=dtype,
+            trust_remote_code=True,
+        )
+        base_model = getattr(full_model, "lfm2", full_model).to(device)
+    except Exception:
+        base_model = AutoModel.from_pretrained(
+            args.base,
+            dtype=dtype,
+            trust_remote_code=True,
+        ).to(device)
 
     # 2. Attach LoRA Adapter to LFM Linear Projections
     target_modules = ["q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2", "conv_weight"]

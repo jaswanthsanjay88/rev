@@ -64,12 +64,23 @@ class LFMDecisionEngine(DecisionEngine):
         self.is_encoder = "encoder" in model_id_or_path.lower() or getattr(self.config, "is_encoder_decoder", False) or "bidirectional" in str(getattr(self.config, "architectures", [])).lower()
 
         # 2. Load Backbone Model
-        self.backbone = AutoModel.from_pretrained(
-            model_id_or_path,
-            torch_dtype=self.dtype,
-            trust_remote_code=True,
-            token=hf_token,
-        ).to(self.device)
+        # LFM2.5 encoder checkpoint was saved with base_model_prefix="lfm2" via Lfm2BidirectionalForMaskedLM
+        try:
+            from transformers import AutoModelForMaskedLM
+            full_model = AutoModelForMaskedLM.from_pretrained(
+                model_id_or_path,
+                dtype=self.dtype,
+                trust_remote_code=True,
+                token=hf_token,
+            )
+            self.backbone = getattr(full_model, "lfm2", full_model).to(self.device)
+        except Exception:
+            self.backbone = AutoModel.from_pretrained(
+                model_id_or_path,
+                dtype=self.dtype,
+                trust_remote_code=True,
+                token=hf_token,
+            ).to(self.device)
         self.backbone.eval()
 
         # 3. Setup Readout Head
