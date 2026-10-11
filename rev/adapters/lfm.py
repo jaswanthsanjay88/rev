@@ -55,20 +55,35 @@ class LFMDecisionEngine(DecisionEngine):
         self.dtype = dtype or (torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float32)
         hf_token = token or os.environ.get("HF_TOKEN")
 
+        # Check if model_id_or_path is an adapter directory
+        adapter_cfg_file = os.path.join(model_id_or_path, "adapter_config.json")
+        is_adapter = False
+        base_model_ref = model_id_or_path
+        if os.path.exists(adapter_cfg_file):
+            try:
+                import json
+                with open(adapter_cfg_file, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    base_model_ref = cfg.get("base_model_name_or_path", "LiquidAI/LFM2.5-Encoder-350M")
+                    is_adapter = True
+            except Exception:
+                pass
+
         # 1. Load Tokenizer & Config
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id_or_path, token=hf_token, trust_remote_code=True)
+        tok_source = model_id_or_path if os.path.exists(os.path.join(model_id_or_path, "tokenizer.json")) else base_model_ref
+        self.tokenizer = AutoTokenizer.from_pretrained(tok_source, token=hf_token, trust_remote_code=True)
         if not self.tokenizer.pad_token_id:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id or 0
 
-        self.config = AutoConfig.from_pretrained(model_id_or_path, token=hf_token, trust_remote_code=True)
-        self.is_encoder = "encoder" in model_id_or_path.lower() or getattr(self.config, "is_encoder_decoder", False) or "bidirectional" in str(getattr(self.config, "architectures", [])).lower()
+        self.config = AutoConfig.from_pretrained(base_model_ref, token=hf_token, trust_remote_code=True)
+        self.is_encoder = "encoder" in base_model_ref.lower() or getattr(self.config, "is_encoder_decoder", False) or "bidirectional" in str(getattr(self.config, "architectures", [])).lower()
 
         # 2. Load Backbone Model
         # LFM2.5 encoder checkpoint was saved with base_model_prefix="lfm2" via Lfm2BidirectionalForMaskedLM
         try:
             from transformers import AutoModelForMaskedLM
             full_model = AutoModelForMaskedLM.from_pretrained(
-                model_id_or_path,
+                base_model_ref,
                 dtype=self.dtype,
                 trust_remote_code=True,
                 token=hf_token,
@@ -76,11 +91,19 @@ class LFMDecisionEngine(DecisionEngine):
             self.backbone = getattr(full_model, "lfm2", full_model).to(self.device)
         except Exception:
             self.backbone = AutoModel.from_pretrained(
-                model_id_or_path,
+                base_model_ref,
                 dtype=self.dtype,
                 trust_remote_code=True,
                 token=hf_token,
             ).to(self.device)
+
+        if is_adapter:
+            try:
+                from peft import PeftModel
+                self.backbone = PeftModel.from_pretrained(self.backbone, model_id_or_path)
+            except Exception as e:
+                print(f"Warning: Failed to attach PEFT adapter from {model_id_or_path}: {e}")
+
         self.backbone.eval()
 
         # 3. Setup Readout Head
@@ -89,8 +112,15 @@ class LFMDecisionEngine(DecisionEngine):
         self.head = LfmReadoutHead(hidden_size=hidden_size, head_dim=head_dim).to(device=self.device, dtype=self.dtype)
 
         # Load trained head weights if available
-        resolved_head = head_path or os.path.join(model_id_or_path, "head.pt")
-        if os.path.exists(resolved_head):
+        resolved_head = head_path
+        if not resolved_head:
+            for cand in ["readout_head.pt", "head.pt"]:
+                p = os.path.join(model_id_or_path, cand)
+                if os.path.exists(p):
+                    resolved_head = p
+                    break
+
+        if resolved_head and os.path.exists(resolved_head):
             head_data = torch.load(resolved_head, map_location=self.device)
             state_dict = head_data.get("head", head_data)
             self.head.load_state_dict(state_dict)

@@ -37,7 +37,20 @@ def _detect_architecture(
             return "vision"
         if "rl_agent_config.json" in files or "encoder" in files:
             return "encoder"
-        if "head.pt" in files or "adapter_config.json" in files:
+        if "readout_head.pt" in files:
+            return "lfm"
+        if "adapter_config.json" in files:
+            try:
+                import json
+                with open(os.path.join(model_id_or_path, "adapter_config.json"), "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    base_ref = str(cfg.get("base_model_name_or_path", "")).lower()
+                    if "lfm" in base_ref or "liquid" in base_ref:
+                        return "lfm"
+            except Exception:
+                pass
+            return "causal"
+        if "head.pt" in files:
             return "causal"
 
     # 3. Hugging Face Hub file inspection (fast shallow probe)
