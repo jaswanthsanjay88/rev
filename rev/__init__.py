@@ -57,6 +57,12 @@ from .router import (
 from .engine_base import DecisionEngine
 from .auto import Rev
 
+# Client Fine-Tuning & Dataset Pipeline
+from .dataset import Dataset, ValidationReport
+from .hardware import HardwarePlanner, HardwareProfile
+from .bundle import BundleManifest, save_bundle, load_manifest
+from .finetune import FinetuneRun, RevFinetunedModel, EvaluationReport
+
 # Primary 'Model', 'Rev', and 'RevVision' aliases
 Model = UnifiedModel
 RevVision = Rev
@@ -108,6 +114,17 @@ __all__ = [
     "Rev",
     "RevVision",
     "DecisionEngine",
+    # Client Fine-Tuning & Dataset Pipeline
+    "Dataset",
+    "ValidationReport",
+    "HardwarePlanner",
+    "HardwareProfile",
+    "BundleManifest",
+    "save_bundle",
+    "load_manifest",
+    "FinetuneRun",
+    "RevFinetunedModel",
+    "EvaluationReport",
     # Unified Model
     "Model",
     "UnifiedModel",
