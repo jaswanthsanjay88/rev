@@ -11,22 +11,114 @@
 
 > **Bring your own labeled data, train on your own hardware, get a calibrated model that knows when to defer to a human.**
 
+```python
+from rev import Rev, Dataset
+
+# The 4-Line Fine-Tuning Pipeline
+ds = Dataset.from_csv("tickets.csv", text="body", label="decision")
+ds.validate()                                                   # 1. Cleanlab-style data validation
+model = Rev.finetune("LiquidAI/LFM2.5-Encoder-350M", ds).fit()   # 2. Auto hardware plan + LoRA + calibration
+model.save("./my-decision-rev")                                 # 3. Portable bundle with human deferral
+
+# 4. Instant local deployment
+Rev.from_pretrained("./my-decision-rev").predict("broken screen refund")
+```
+
 ---
 
-## 1. Why `rev`?
+## 1. The Client Fine-Tuning Pipeline
 
-Routing incoming requests, enforcing safety guardrails, classifying support tickets, and evaluating agent traces should not cost 800 milliseconds and 50 cents per call. Generic autoregressive LLMs output JSON one token at a time, exposing production pipelines to parsing errors, hallucinated schemas, overconfidence, and latency spikes.
+Most fine-tuning toolkits optimize solely for raw accuracy without giving you reliable probabilities. In high-stakes production tasks (billing triage, refunds, SOC alerts, moderation), an uncalibrated model that confidently makes a wrong decision costs ten times more than escalating to a human agent.
 
-`rev` is a **System 1 decision engine and local fine-tuning framework**:
-1. **Single Prefill Forward Pass**: Reads text once and evaluates multiple typed questions concurrently. Delivers sub-millisecond execution, zero autoregressive token generation, and 100% deterministic schema conformance.
-2. **Mathematically Calibrated Confidence (ECE < 0.08)**: Scored using strictly proper scoring rules (Logarithmic + Spherical + Ranked Probability Score) and validation temperature scaling.
-3. **Cost-Aware Deferral**: Tune confident abstention thresholds against your business cost matrix (e.g., auto-handle 85% of cases at 99% precision, safely routing the uncertain 15% to human agents).
-4. **Multi-Backbone Support**: Native support for **ModernBERT-large**, **mmBERT** (100+ languages), and **Liquid Foundation Models (LFM2.5 350M)**.
-5. **Portable `.rev` Bundles**: Self-contained model bundles (`manifest.json`, `calibration.json`, `metrics.json`, `readout_head.pt`, safetensors) deployable anywhere in Python or TypeScript.
+`rev` transforms your raw tabular or text dataset into a calibrated, cost-aware decision engine through a 6-stage automated pipeline:
+
+```
+[ Labeled Data ] 
+       │
+       ▼
+ 1. Data Validation  ───► Cleanlab-style audit (duplicates, label noise, severe imbalance)
+       │
+       ▼
+ 2. Hardware Planner ───► Auto-inspects CUDA VRAM / Apple MPS / CPU -> sets dtype & batch size
+       │
+       ▼
+ 3. LoRA Adaptation  ───► Candidate-conditioned LoRA + non-autoregressive readout head
+       │
+       ▼
+ 4. RLCD Calibration ───► Temperature scaling on validation split (ECE < 0.05)
+       │
+       ▼
+ 5. Deferral Tuning  ───► Optimal abstain threshold based on cost(error) vs cost(human)
+       │
+       ▼
+ 6. Portable .rev    ───► Self-contained bundle (manifest, weights, tokenizer, calibration)
+```
+
+### End-to-End Fine-Tuning Example
+
+```python
+from rev import Rev, Dataset
+
+# Step 1: Load your labeled data (CSV, JSONL, Parquet, Python dicts, or Hugging Face)
+ds = Dataset.from_csv("tickets.csv", text="body", label="decision")
+
+# Step 2: Validate data quality before spending compute
+report = ds.validate()
+print(report.summary())
+# Catches empty strings, extreme imbalance, exact duplicates, and conflicting labels
+assert report.is_healthy, f"Data validation issues found: {report.issues}"
+
+# Step 3: Configure fine-tuning run (auto-selects precision, batch sizes, gradient steps)
+run = Rev.finetune(
+    backbone="LiquidAI/LFM2.5-Encoder-350M", # or "jaswanthsanjay88/rev-decision-model"
+    dataset=ds,
+    val_split=0.2,
+    lr=2e-4,
+    epochs=3,
+    deferral_cost_ratio=4.0, # A wrong decision is 4x worse than a human escalation
+)
+
+# Step 4: Fit model with LoRA adaptation, readout head training & temperature calibration
+model = run.fit()
+
+# Step 5: Evaluate: Reports per-class F1, ECE, TF-IDF baseline comparison, and deferral scorecard
+eval_results = model.evaluate()
+print(eval_results.summary())
+# Output:
+#   Overall Accuracy: 94.2% (vs TF-IDF baseline: 78.1%)
+#   Calibrated ECE: 0.041
+#   Cost-Optimal Abstain Threshold: 0.725
+#   Coverage: 86.4% handled automatically at 98.9% precision | 13.6% routed to human review
+
+# Step 6: Export as a portable self-contained .rev bundle
+model.save("./acme-decision-rev")
+
+# Step 7: Load and execute in production
+deployed = Rev.from_pretrained("./acme-decision-rev")
+decision = deployed.predict("Please process a full refund for invoice #891")
+print(decision)
+# -> {"choice": "refund", "confidence": 0.982, "defer_to_human": False}
+```
 
 ---
 
-## 2. Quickstart: Inference
+## 2. Interactive Colab Training & Fine-Tuning Curves
+
+Train `LiquidAI/LFM2.5-Encoder-350M` or ModernBERT on free Google Colab T4 GPUs in one click:
+- **Colab Notebook**: [`notebooks/train_lfm_fast_decisions_colab.ipynb`](notebooks/train_lfm_fast_decisions_colab.ipynb)
+- **Dataset**: Compatible with [`fastino/fast-decisions`](https://huggingface.co/datasets/fastino/fast-decisions) or your custom CSV/JSONL.
+
+<p align="center">
+  <img src="assets/training_curves.png" alt="RLCD Multi-Head Training Loss and Validation Accuracy" width="100%">
+</p>
+
+*Figure: Multi-head candidate-conditioned training loss convergence across 3 epochs on `LiquidAI/LFM2.5-Encoder-350M` paired with the calibrated `LfmReadoutHead`.*
+
+---
+
+## 3. Quickstart: Zero-Shot & Multi-Question Inference
+
+Evaluate incoming requests, safety guardrails, and customer states in a **single forward pass** with zero token generation:
 
 ### Installation
 
@@ -91,62 +183,13 @@ console.log(`Latency: ${res.latency_ms} ms`);
 
 ---
 
-## 3. Client Fine-Tuning Suite
-
-Train a production-grade calibrated decision model directly on your machine or in Google Colab:
-
-```python
-from rev import Rev, Dataset
-
-# 1. Load your labeled data (CSV, JSONL, Parquet, Python dicts, or Hugging Face)
-ds = Dataset.from_csv("tickets.csv", text="body", label="decision")
-
-# 2. Validate data quality before training (catches duplicates, severe imbalance, and label noise)
-report = ds.validate()
-print(report.summary())
-assert report.is_healthy, f"Fix data issues: {report.issues}"
-
-# 3. Configure automated fine-tuning (auto hardware planner sets CUDA/MPS/CPU settings)
-run = Rev.finetune(
-    backbone="LiquidAI/LFM2.5-Encoder-350M", # or "jaswanthsanjay88/rev-decision-model"
-    dataset=ds,
-    val_split=0.2,
-    lr=2e-4,
-    epochs=3,
-    deferral_cost_ratio=4.0, # Cost of wrong decision vs human escalation
-)
-
-# 4. Fit model with LoRA adaptation, readout head training & temperature calibration
-model = run.fit()
-
-# 5. Evaluate: Reports per-class F1, ECE, TF-IDF baseline comparison, and human deferral scorecard
-eval_results = model.evaluate()
-print(eval_results.summary())
-# Example output:
-# Overall Accuracy: 94.2% (vs TF-IDF baseline: 78.1%)
-# Calibrated ECE: 0.041
-# Cost-Optimal Abstain Threshold: 0.725
-# Coverage: 86.4% handled automatically at 98.9% precision | 13.6% routed to human review
-
-# 6. Save as a self-contained portable bundle
-model.save("./acme-decision-rev")
-
-# 7. Reload and execute in production
-deployed = Rev.from_pretrained("./acme-decision-rev")
-decision = deployed.predict("Please process a full refund for invoice #891")
-print(decision)
-# -> {"choice": "refund", "confidence": 0.982, "defer_to_human": False}
-```
-
----
-
 ## 4. Key Architectural Features
 
-- **Unified 'One Model' Architecture**: Routes seamlessly across **ModernBERT-large** (421M, English), **mmBERT-base** (322M, 100+ languages), and **Liquid Foundation Models (LFM2.5 350M)**.
+- **Unified Multi-Backbone Architecture**: Native support for **ModernBERT-large** (421M, English), **mmBERT-base** (322M, 100+ languages), and **Liquid Foundation Models (LFM2.5 350M)**.
 - **Sub-Microsecond Script Routing (`rev.lang`)**: Zero-dependency Unicode script detector covering 26 non-Latin scripts (Devanagari, Cyrillic, Arabic, Han, Hangul, etc.) in $<1\ \mu\text{s}$.
-- **Candidate-Conditioned Option Readout**: Scores arbitrary candidate choices via cross-attentive hidden states ($q^T k_i / \sqrt{d}$) without autoregressive token generation.
-- **Document Prefix KV-Caching (<4ms)**: Caches document key/value activations via thread-safe SHA-256 LRU cache for $>10\times$ speedups on multi-query workloads.
-- **Strictly Proper Scoring Rules (RLCD)**: Directly penalizes overconfidence during calibration (ECE 0.041–0.081 vs standard LLMs at 0.24+).
+- **Single-Pass Candidate Pooling**: Extracts probabilities directly from delimiter hidden states ($q^T k_i / \sqrt{d}$) without autoregressive decoding.
+- **Document Prefix KV-Caching (<4ms)**: Caches document key/value activations via thread-safe SHA-256 LRU cache for $>10\times$ speedups on repeated queries.
+- **Strictly Proper Scoring Rules (RLCD)**: Combines Logarithmic Score + Spherical Score + Ranked Probability Score (RPS) directly penalizing overconfidence (ECE 0.041–0.081 vs standard LLMs at 0.24+).
 - **Automated Hardware Planner**: Detects CUDA VRAM tiers, Apple Silicon MPS, or CPU, automatically picking optimal dtype (`bfloat16`, `float16`, `float32`), batch size, and gradient accumulation steps.
 - **Cleanlab-Style Data Validator**: Guards against empty text, extreme class imbalance, exact text duplicates, and conflicting labels before training begins.
 - **Portable `.rev` Bundle**: Standardized directory format containing `manifest.json`, `calibration.json`, `metrics.json`, `readout_head.pt`, safetensors, and tokenizer.
@@ -206,17 +249,34 @@ curl -X POST http://localhost:8000/v1/systemone \
 
 ---
 
-## 7. Interactive Colab Training & Fine-Tuning Curves
+## 7. Enterprise Presets
 
-Fine-tune `LiquidAI/LFM2.5-Encoder-350M` or ModernBERT on custom decision datasets using free Google Colab T4 GPUs:
-- **Notebook**: [`notebooks/train_lfm_fast_decisions_colab.ipynb`](notebooks/train_lfm_fast_decisions_colab.ipynb)
-- **Dataset**: Compatible with [`fastino/fast-decisions`](https://huggingface.co/datasets/fastino/fast-decisions) or any custom CSV/JSONL file.
+Import turnkey production schemas directly from `rev.presets`:
 
-<p align="center">
-  <img src="assets/training_curves.png" alt="RLCD Multi-Head Training Loss and Validation Accuracy" width="100%">
-</p>
+```python
+import rev
 
-*Figure: Multi-head candidate-conditioned training loss convergence across 3 epochs on `LiquidAI/LFM2.5-Encoder-350M` paired with the calibrated `LfmReadoutHead`.*
+# Support ticket triage
+triage = rev.presets.triage_questions()
+
+# Inbound email routing & phishing filtering
+email = rev.presets.email_questions()
+
+# Real-time LLM prompt guardrails (jailbreaks, injections, PII)
+guard = rev.presets.guard_questions()
+
+# Content safety and policy moderation
+moderation = rev.presets.moderation_questions()
+
+# Accounts payable invoice discrepancy matching
+invoice = rev.presets.invoice_questions()
+
+# Security Operations Center (SOC) incident response
+security = rev.presets.security_questions()
+
+# Autonomous agent trace evaluation and guardrail gating
+observability = rev.presets.observability_questions()
+```
 
 ---
 
