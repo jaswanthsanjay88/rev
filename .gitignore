@@ -17,6 +17,8 @@ checkpoints/
 *.pt
 *.safetensors
 *.bin
+!rev_lfm_finetuned/readout_head.pt
+!rev_lfm_finetuned/adapter_model.safetensors
 
 # Next.js Playground & Node
 node_modules/
