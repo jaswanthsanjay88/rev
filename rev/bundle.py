@@ -58,7 +58,7 @@ class BundleManifest:
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "BundleManifest":
         return cls(
-            rev_version=d.get("rev_version", "0.3.0"),
+            rev_version=d.get("rev_version", "0.4.0"),
             backbone=d.get("backbone", "jaswanthsanjay88/rev-decision-model"),
             labels=d.get("labels", []),
             label_to_id=d.get("label_to_id", {}),
