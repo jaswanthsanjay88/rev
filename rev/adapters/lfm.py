@@ -32,6 +32,9 @@ class LfmReadoutHead(nn.Module):
 
     def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
         """hidden_states: [num_options, hidden_size] -> logits: [num_options]"""
+        w_dtype = self.proj[0].weight.dtype
+        if hidden_states.dtype != w_dtype:
+            hidden_states = hidden_states.to(w_dtype)
         return self.proj(hidden_states).squeeze(-1)
 
 
